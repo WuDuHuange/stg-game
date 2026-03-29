@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import path from 'path';
 
 export default defineConfig({
+  base: './', // 确保使用相对路径
   resolve: {
     alias: {
       '@core': path.resolve(__dirname, './src/core'),
@@ -21,12 +22,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    base: './',
     rollupOptions: {
       output: {
         manualChunks: {
           'phaser': ['phaser'],
         },
+        // 确保生成的文件使用相对路径
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js'
       },
     },
   },
