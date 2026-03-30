@@ -15,9 +15,13 @@ export class GameScene extends Phaser.Scene {
     private enemies!: Phaser.GameObjects.Group;
     private score: number = 0;
     private scoreText!: Phaser.GameObjects.Text;
+    private healthBar!: Phaser.GameObjects.Rectangle;
+    private healthText!: Phaser.GameObjects.Text;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
+    private gameOver: boolean = false;
+    private playerInvincible: boolean = false;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -145,7 +149,7 @@ export class GameScene extends Phaser.Scene {
         );
 
         // 创建血条
-        const healthBar = this.add.rectangle(
+        this.healthBar = this.add.rectangle(
             20,
             20,
             200,
@@ -154,7 +158,7 @@ export class GameScene extends Phaser.Scene {
         ).setOrigin(0, 0.5);
 
         // 创建血条文本
-        const healthText = this.add.text(
+        this.healthText = this.add.text(
             120,
             20,
             '100/100',
@@ -379,6 +383,8 @@ export class GameScene extends Phaser.Scene {
      * 检查碰撞
      */
     private checkCollisions(): void {
+        if (this.gameOver) return;
+
         // 子弹与敌人的碰撞
         this.bullets.getChildren().forEach((bullet: any) => {
             this.enemies.getChildren().forEach((enemy: any) => {
@@ -427,20 +433,119 @@ export class GameScene extends Phaser.Scene {
             );
 
             if (distance < 35) {
-                // 玩家受伤
-                const health = this.player.getData('health');
-                const newHealth = Math.max(0, health - 10);
-                this.player.setData('health', newHealth);
-
-                // 闪烁效果
-                this.player.setTint(0xff0000);
-                this.time.delayedCall(100, () => {
-                    this.player.clearTint();
-                });
-
-                // 敌人消失
+                this.playerTakeDamage(10);
                 enemy.destroy();
             }
+        });
+    }
+
+    /**
+     * 玩家受到伤害
+     */
+    private playerTakeDamage(damage: number): void {
+        if (this.playerInvincible || this.gameOver) return;
+
+        const health = this.player.getData('health');
+        const newHealth = Math.max(0, health - damage);
+        this.player.setData('health', newHealth);
+
+        // 更新血条
+        this.updateHealthBar();
+
+        // 闪烁效果
+        this.player.setTint(0xff0000);
+        this.playerInvincible = true;
+
+        this.time.delayedCall(100, () => {
+            this.player.clearTint();
+        });
+
+        // 1秒无敌时间
+        this.time.delayedCall(1000, () => {
+            this.playerInvincible = false;
+        });
+
+        // 检查游戏结束
+        if (newHealth <= 0) {
+            this.gameOver = true;
+            this.handleGameOver();
+        }
+    }
+
+    /**
+     * 更新血条
+     */
+    private updateHealthBar(): void {
+        const health = this.player.getData('health');
+        const maxHealth = this.player.getData('maxHealth');
+        const healthPercent = health / maxHealth;
+
+        this.healthBar.width = 200 * healthPercent;
+        this.healthText.setText(`${health}/${maxHealth}`);
+
+        // 血量低时改变颜色
+        if (healthPercent < 0.3) {
+            this.healthBar.fillColor = 0xff0000;
+        } else if (healthPercent < 0.6) {
+            this.healthBar.fillColor = 0xffaa00;
+        } else {
+            this.healthBar.fillColor = 0xe94560;
+        }
+    }
+
+    /**
+     * 处理游戏结束
+     */
+    private handleGameOver(): void {
+        // 停止生成敌人
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.destroy();
+        }
+
+        // 显示游戏结束界面
+        const gameOverBg = this.add.rectangle(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2,
+            600,
+            400,
+            0x000000,
+            0.8
+        );
+
+        const gameOverText = this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2 - 50,
+            '游戏结束',
+            {
+                fontSize: '48px',
+                color: '#ff0000',
+                fontStyle: 'bold'
+            }
+        ).setOrigin(0.5);
+
+        const finalScoreText = this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2 + 20,
+            `最终分数: ${this.score}`,
+            {
+                fontSize: '32px',
+                color: '#ffffff'
+            }
+        ).setOrigin(0.5);
+
+        const restartText = this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2 + 100,
+            '按 ESC 返回主菜单',
+            {
+                fontSize: '24px',
+                color: '#888888'
+            }
+        ).setOrigin(0.5);
+
+        // ESC键返回主菜单
+        this.escKey.on('down', () => {
+            this.scene.start('MenuScene');
         });
     }
 
