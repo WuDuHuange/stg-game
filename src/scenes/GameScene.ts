@@ -238,7 +238,10 @@ export class GameScene extends Phaser.Scene {
      * 更新游戏逻辑
      */
     update(): void {
-        if (!this.player) return;
+        // 如果游戏结束，停止更新
+        if (this.gameOver) return;
+
+        if (!this.player || !this.player.active) return;
 
         const speed = this.player.getData('speed');
         let velocityX = 0;
@@ -538,10 +541,16 @@ export class GameScene extends Phaser.Scene {
      * 处理游戏结束
      */
     private handleGameOver(): void {
+        console.log('GameScene: 游戏结束，分数:', this.score);
+
         // 停止生成敌人
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
+            this.enemySpawnTimer = null!;
         }
+
+        // 停止所有动画
+        this.tweens.killAll();
 
         // 显示游戏结束界面
         const gameOverBg = this.add.rectangle(
@@ -550,7 +559,7 @@ export class GameScene extends Phaser.Scene {
             600,
             400,
             0x000000,
-            0.8
+            0.9
         );
 
         const gameOverText = this.add.text(
@@ -580,12 +589,15 @@ export class GameScene extends Phaser.Scene {
             '按 ESC 返回主菜单',
             {
                 fontSize: '24px',
-                color: '#888888'
+                color: '#ffffff',
+                fontStyle: 'bold'
             }
         ).setOrigin(0.5);
 
         // ESC键返回主菜单
+        this.escKey.removeAllListeners();
         this.escKey.on('down', () => {
+            console.log('GameScene: 返回主菜单');
             this.scene.start('MenuScene');
         });
     }
