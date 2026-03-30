@@ -17,6 +17,7 @@ export class GameScene extends Phaser.Scene {
     private scoreText!: Phaser.GameObjects.Text;
     private healthBar!: Phaser.GameObjects.Rectangle;
     private healthText!: Phaser.GameObjects.Text;
+    private pauseText!: Phaser.GameObjects.Text;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -183,7 +184,7 @@ export class GameScene extends Phaser.Scene {
         ).setOrigin(1, 0.5);
 
         // 创建暂停提示（更明显，但不会干扰游戏）
-        const pauseText = this.add.text(
+        this.pauseText = this.add.text(
             this.cameras.main.width / 2,
             this.cameras.main.height - 20,
             'ESC 返回主菜单',
@@ -193,6 +194,22 @@ export class GameScene extends Phaser.Scene {
                 fontStyle: 'italic'
             }
         ).setOrigin(0.5);
+
+        // 5秒后淡出ESC提示
+        this.time.delayedCall(5000, () => {
+            if (this.pauseText && this.pauseText.active) {
+                this.tweens.add({
+                    targets: this.pauseText,
+                    alpha: 0,
+                    duration: 500,
+                    onComplete: () => {
+                        if (this.pauseText) {
+                            this.pauseText.destroy();
+                        }
+                    }
+                });
+            }
+        });
     }
 
     /**
