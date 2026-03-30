@@ -441,11 +441,13 @@ export class GameScene extends Phaser.Scene {
                 // 敌人受伤
                 enemy.setData('health', newHealth);
 
-                // 闪烁效果
-                enemy.setTint(0xffffff);
+                // 闪烁效果（保存原始颜色）
+                const originalColor = enemy.fillColor;
+                enemy.setFillStyle(0xffffff);
+
                 this.time.delayedCall(100, () => {
                     if (enemy.active) {
-                        enemy.clearTint();
+                        enemy.setFillStyle(originalColor);
                     }
                 });
             }
@@ -496,12 +498,15 @@ export class GameScene extends Phaser.Scene {
         // 更新血条
         this.updateHealthBar();
 
-        // 闪烁效果
-        this.player.setTint(0xff0000);
+        // 闪烁效果（保存原始颜色）
+        const originalColor = this.player.fillColor;
+        this.player.setFillStyle(0xff0000);
         this.playerInvincible = true;
 
         this.time.delayedCall(100, () => {
-            this.player.clearTint();
+            if (this.player && this.player.active) {
+                this.player.setFillStyle(originalColor);
+            }
         });
 
         // 1秒无敌时间
