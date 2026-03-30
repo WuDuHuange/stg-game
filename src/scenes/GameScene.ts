@@ -138,19 +138,20 @@ export class GameScene extends Phaser.Scene {
      * 创建HUD
      */
     private createHUD(): void {
-        // 创建血条背景
+        // 创建血条背景（更明显的边框）
         const healthBarBg = this.add.rectangle(
+            110,
             20,
-            20,
-            200,
-            20,
-            0x000000,
-            0.7
+            204,
+            24,
+            0x1a1a2e,
+            0.9
         );
+        healthBarBg.setStrokeStyle(2, 0x0f3460);
 
         // 创建血条
         this.healthBar = this.add.rectangle(
-            20,
+            10,
             20,
             200,
             20,
@@ -164,7 +165,8 @@ export class GameScene extends Phaser.Scene {
             '100/100',
             {
                 fontSize: '14px',
-                color: '#ffffff'
+                color: '#ffffff',
+                fontStyle: 'bold'
             }
         ).setOrigin(0.5);
 
@@ -180,14 +182,15 @@ export class GameScene extends Phaser.Scene {
             }
         ).setOrigin(1, 0.5);
 
-        // 创建暂停提示
+        // 创建暂停提示（更明显，但不会干扰游戏）
         const pauseText = this.add.text(
             this.cameras.main.width / 2,
-            this.cameras.main.height - 30,
-            '按 ESC 返回主菜单',
+            this.cameras.main.height - 20,
+            'ESC 返回主菜单',
             {
-                fontSize: '16px',
-                color: '#888888'
+                fontSize: '14px',
+                color: '#666666',
+                fontStyle: 'italic'
             }
         ).setOrigin(0.5);
     }
@@ -386,47 +389,78 @@ export class GameScene extends Phaser.Scene {
         if (this.gameOver) return;
 
         // 子弹与敌人的碰撞
+        const bulletsToDestroy: any[] = [];
+        const enemiesToDamage: Map<any, number> = new Map();
+
         this.bullets.getChildren().forEach((bullet: any) => {
+            if (!bullet.active) return;
+
             this.enemies.getChildren().forEach((enemy: any) => {
+                if (!enemy.active) return;
+
                 const distance = Phaser.Math.Distance.Between(
                     bullet.x, bullet.y,
                     enemy.x, enemy.y
                 );
 
                 if (distance < 20) {
-                    // 击中敌人
-                    const damage = bullet.getData('damage');
-                    const health = enemy.getData('health');
-                    const newHealth = health - damage;
-
-                    if (newHealth <= 0) {
-                        // 敌人死亡
-                        const score = enemy.getData('score');
-                        this.score += score;
-                        this.scoreText.setText(`分数: ${this.score}`);
-
-                        // 添加爆炸效果
-                        this.createExplosion(enemy.x, enemy.y);
-
-                        enemy.destroy();
-                    } else {
-                        // 敌人受伤
-                        enemy.setData('health', newHealth);
-
-                        // 闪烁效果
-                        enemy.setTint(0xffffff);
-                        this.time.delayedCall(100, () => {
-                            enemy.clearTint();
-                        });
+                    // 标记子弹要销毁
+                    if (!bulletsToDestroy.includes(bullet)) {
+                        bulletsToDestroy.push(bullet);
                     }
 
-                    bullet.destroy();
+                    // 计算伤害
+                    const damage = bullet.getData('damage');
+                    const currentDamage = enemiesToDamage.get(enemy) || 0;
+                    enemiesToDamage.set(enemy, currentDamage + damage);
                 }
             });
         });
 
+        // 应用伤害
+        enemiesToDamage.forEach((damage, enemy) => {
+            if (!enemy.active) return;
+
+            const health = enemy.getData('health');
+            const newHealth = health - damage;
+
+            if (newHealth <= 0) {
+                // 敌人死亡
+                const score = enemy.getData('score');
+                this.score += score;
+                this.scoreText.setText(`分数: ${this.score}`);
+
+                // 添加爆炸效果
+                this.createExplosion(enemy.x, enemy.y);
+
+                enemy.destroy();
+            } else {
+                // 敌人受伤
+                enemy.setData('health', newHealth);
+
+                // 闪烁效果
+                enemy.setTint(0xffffff);
+                this.time.delayedCall(100, () => {
+                    if (enemy.active) {
+                        enemy.clearTint();
+                    }
+                });
+            }
+        });
+
+        // 销毁子弹
+        bulletsToDestroy.forEach(bullet => {
+            if (bullet.active) {
+                bullet.destroy();
+            }
+        });
+
         // 敌人与玩家的碰撞
+        const enemiesToDestroy: any[] = [];
         this.enemies.getChildren().forEach((enemy: any) => {
+            // 检查敌人是否仍然有效
+            if (!enemy.active) return;
+
             const distance = Phaser.Math.Distance.Between(
                 this.player.x, this.player.y,
                 enemy.x, enemy.y
@@ -434,6 +468,13 @@ export class GameScene extends Phaser.Scene {
 
             if (distance < 35) {
                 this.playerTakeDamage(10);
+                enemiesToDestroy.push(enemy);
+            }
+        });
+
+        // 统一销毁敌人，避免在遍历过程中修改数组
+        enemiesToDestroy.forEach(enemy => {
+            if (enemy.active) {
                 enemy.destroy();
             }
         });
@@ -574,9 +615,27 @@ export class GameScene extends Phaser.Scene {
      * 场景销毁
      */
     destroy(): void {
+        console.log('GameScene: 场景销毁');
+
+        // 停止所有定时器
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
         }
+
+        // 停止所有动画
+        this.tweens.killAll();
+
+        // 停止所有延迟调用
+        this.time.removeAllEvents();
+
+        // 清理所有游戏对象
+        if (this.bullets) {
+            this.bullets.clear(true, true);
+        }
+        if (this.enemies) {
+            this.enemies.clear(true, true);
+        }
+
         super.destroy();
     }
 }

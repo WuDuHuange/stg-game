@@ -226,4 +226,19 @@ export class MenuScene extends Phaser.Scene {
         console.log('退出游戏');
         // 在浏览器中无法真正退出，这里可以显示退出确认
     }
+
+    /**
+     * 场景销毁
+     */
+    destroy(): void {
+        console.log('MenuScene: 场景销毁');
+
+        // 停止所有动画
+        this.tweens.killAll();
+
+        // 清理所有粒子
+        this.scene.getScene('MenuScene')?.particles?.destroy();
+
+        super.destroy();
+    }
 }
