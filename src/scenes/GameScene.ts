@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 
 export class GameScene extends Phaser.Scene {
     private player!: Phaser.GameObjects.Sprite;
+    private playerGlow!: Phaser.GameObjects.GameObject;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: any;
     private spaceKey!: Phaser.Input.Keyboard.Key;
@@ -104,8 +105,8 @@ export class GameScene extends Phaser.Scene {
             0xe94560
         );
 
-        // 添加玩家光晕效果
-        const glow = this.add.circle(
+        // 添加玩家光晕效果（保存引用）
+        this.playerGlow = this.add.circle(
             this.cameras.main.width / 2,
             this.cameras.main.height - 100,
             30,
@@ -286,6 +287,12 @@ export class GameScene extends Phaser.Scene {
         // 更新玩家位置
         this.player.x += velocityX * this.game.loop.delta / 1000;
         this.player.y += velocityY * this.game.loop.delta / 1000;
+
+        // 更新光晕位置（跟随玩家）
+        if (this.playerGlow && this.playerGlow.active) {
+            this.playerGlow.x = this.player.x;
+            this.playerGlow.y = this.player.y;
+        }
 
         // 限制玩家在屏幕内
         this.player.x = Phaser.Math.Clamp(
