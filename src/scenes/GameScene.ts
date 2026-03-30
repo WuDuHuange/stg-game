@@ -10,6 +10,14 @@ export class GameScene extends Phaser.Scene {
     private wasd!: any;
     private spaceKey!: Phaser.Input.Keyboard.Key;
     private escKey!: Phaser.Input.Keyboard.Key;
+    private instructions!: Phaser.GameObjects.Text[];
+    private bullets!: Phaser.GameObjects.Group;
+    private enemies!: Phaser.GameObjects.Group;
+    private score: number = 0;
+    private scoreText!: Phaser.GameObjects.Text;
+    private lastShotTime: number = 0;
+    private shotCooldown: number = 200; // 射击冷却时间（毫秒）
+    private enemySpawnTimer!: Phaser.Time.TimerEvent;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -38,11 +46,18 @@ export class GameScene extends Phaser.Scene {
         // 设置输入
         this.setupInput();
 
+        // 创建游戏对象组
+        this.bullets = this.add.group();
+        this.enemies = this.add.group();
+
         // 创建HUD
         this.createHUD();
 
         // 显示提示信息
         this.showInstructions();
+
+        // 开始生成敌人
+        this.startEnemySpawning();
     }
 
     /**
@@ -150,7 +165,7 @@ export class GameScene extends Phaser.Scene {
         ).setOrigin(0.5);
 
         // 创建分数显示
-        const scoreText = this.add.text(
+        this.scoreText = this.add.text(
             this.cameras.main.width - 20,
             20,
             '分数: 0',
@@ -183,8 +198,10 @@ export class GameScene extends Phaser.Scene {
             '按 ESC 返回主菜单'
         ];
 
+        this.instructions = [];
+
         instructions.forEach((text, index) => {
-            this.add.text(
+            const instructionText = this.add.text(
                 this.cameras.main.width / 2,
                 this.cameras.main.height / 2 - 50 + index * 30,
                 text,
@@ -194,11 +211,19 @@ export class GameScene extends Phaser.Scene {
                     fontStyle: 'bold'
                 }
             ).setOrigin(0.5);
+            this.instructions.push(instructionText);
         });
 
         // 3秒后隐藏提示
         this.time.delayedCall(3000, () => {
-            // TODO: 实现提示隐藏逻辑
+            this.instructions.forEach(text => {
+                this.tweens.add({
+                    targets: text,
+                    alpha: 0,
+                    duration: 500,
+                    onComplete: () => text.destroy()
+                });
+            });
         });
     }
 
@@ -249,7 +274,204 @@ export class GameScene extends Phaser.Scene {
 
         // 检查射击
         if (this.spaceKey.isDown) {
-            // TODO: 实现射击逻辑
+            const currentTime = Date.now();
+            if (currentTime - this.lastShotTime >= this.shotCooldown) {
+                this.shoot();
+                this.lastShotTime = currentTime;
+            }
         }
+
+        // 更新子弹
+        this.updateBullets();
+
+        // 更新敌人
+        this.updateEnemies();
+
+        // 检查碰撞
+        this.checkCollisions();
+    }
+
+    /**
+     * 射击
+     */
+    private shoot(): void {
+        const bullet = this.add.circle(
+            this.player.x,
+            this.player.y - 20,
+            5,
+            0x00ff00
+        );
+
+        bullet.setData('speed', 500);
+        bullet.setData('damage', 10);
+
+        this.bullets.add(bullet);
+
+        // 添加射击音效（可选）
+        // this.sound.play('shoot');
+    }
+
+    /**
+     * 更新子弹
+     */
+    private updateBullets(): void {
+        this.bullets.getChildren().forEach((bullet: any) => {
+            const speed = bullet.getData('speed');
+            bullet.y -= speed * this.game.loop.delta / 1000;
+
+            // 移除超出屏幕的子弹
+            if (bullet.y < -10) {
+                bullet.destroy();
+            }
+        });
+    }
+
+    /**
+     * 开始生成敌人
+     */
+    private startEnemySpawning(): void {
+        this.enemySpawnTimer = this.time.addEvent({
+            delay: 2000, // 每2秒生成一个敌人
+            callback: this.spawnEnemy,
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    /**
+     * 生成敌人
+     */
+    private spawnEnemy(): void {
+        const x = Phaser.Math.Between(30, this.cameras.main.width - 30);
+        const y = -30;
+
+        const enemy = this.add.circle(x, y, 15, 0xff0000);
+        enemy.setData('speed', Phaser.Math.Between(50, 150));
+        enemy.setData('health', 20);
+        enemy.setData('maxHealth', 20);
+        enemy.setData('score', 100);
+
+        // 添加敌人光晕
+        const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
+
+        this.enemies.add(enemy);
+    }
+
+    /**
+     * 更新敌人
+     */
+    private updateEnemies(): void {
+        this.enemies.getChildren().forEach((enemy: any) => {
+            const speed = enemy.getData('speed');
+            enemy.y += speed * this.game.loop.delta / 1000;
+
+            // 简单的左右摆动
+            enemy.x += Math.sin(Date.now() / 500) * 0.5;
+
+            // 移除超出屏幕的敌人
+            if (enemy.y > this.cameras.main.height + 30) {
+                enemy.destroy();
+            }
+        });
+    }
+
+    /**
+     * 检查碰撞
+     */
+    private checkCollisions(): void {
+        // 子弹与敌人的碰撞
+        this.bullets.getChildren().forEach((bullet: any) => {
+            this.enemies.getChildren().forEach((enemy: any) => {
+                const distance = Phaser.Math.Distance.Between(
+                    bullet.x, bullet.y,
+                    enemy.x, enemy.y
+                );
+
+                if (distance < 20) {
+                    // 击中敌人
+                    const damage = bullet.getData('damage');
+                    const health = enemy.getData('health');
+                    const newHealth = health - damage;
+
+                    if (newHealth <= 0) {
+                        // 敌人死亡
+                        const score = enemy.getData('score');
+                        this.score += score;
+                        this.scoreText.setText(`分数: ${this.score}`);
+
+                        // 添加爆炸效果
+                        this.createExplosion(enemy.x, enemy.y);
+
+                        enemy.destroy();
+                    } else {
+                        // 敌人受伤
+                        enemy.setData('health', newHealth);
+
+                        // 闪烁效果
+                        enemy.setTint(0xffffff);
+                        this.time.delayedCall(100, () => {
+                            enemy.clearTint();
+                        });
+                    }
+
+                    bullet.destroy();
+                }
+            });
+        });
+
+        // 敌人与玩家的碰撞
+        this.enemies.getChildren().forEach((enemy: any) => {
+            const distance = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                enemy.x, enemy.y
+            );
+
+            if (distance < 35) {
+                // 玩家受伤
+                const health = this.player.getData('health');
+                const newHealth = Math.max(0, health - 10);
+                this.player.setData('health', newHealth);
+
+                // 闪烁效果
+                this.player.setTint(0xff0000);
+                this.time.delayedCall(100, () => {
+                    this.player.clearTint();
+                });
+
+                // 敌人消失
+                enemy.destroy();
+            }
+        });
+    }
+
+    /**
+     * 创建爆炸效果
+     */
+    private createExplosion(x: number, y: number): void {
+        const particles = this.add.particles(0, 0, 'default', {
+            x: x,
+            y: y,
+            speed: { min: 50, max: 150 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 1, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 500,
+            quantity: 10,
+            tint: 0xff0000
+        });
+
+        this.time.delayedCall(500, () => {
+            particles.destroy();
+        });
+    }
+
+    /**
+     * 场景销毁
+     */
+    destroy(): void {
+        if (this.enemySpawnTimer) {
+            this.enemySpawnTimer.destroy();
+        }
+        super.destroy();
     }
 }
