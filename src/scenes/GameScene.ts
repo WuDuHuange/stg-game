@@ -4,6 +4,7 @@
 
 import Phaser from 'phaser';
 import { ParticleSystem } from '@game/ParticleSystem';
+import { ScreenEffects } from '@game/ScreenEffects';
 
 export class GameScene extends Phaser.Scene {
     private player!: Phaser.GameObjects.Sprite;
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
     private healthText!: Phaser.GameObjects.Text;
     private pauseText!: Phaser.GameObjects.Text;
     private particleSystem!: ParticleSystem;
+    private screenEffects!: ScreenEffects;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -60,6 +62,9 @@ export class GameScene extends Phaser.Scene {
 
         // 创建粒子系统
         this.particleSystem = new ParticleSystem(this);
+
+        // 创建屏幕特效系统
+        this.screenEffects = new ScreenEffects(this);
 
         // 创建HUD
         this.createHUD();
@@ -465,6 +470,9 @@ export class GameScene extends Phaser.Scene {
                 // 添加爆炸效果
                 this.createExplosion(enemy.x, enemy.y);
 
+                // 添加轻微屏幕震动
+                this.screenEffects.shake(5, 200);
+
                 enemy.destroy();
             } else {
                 // 敌人受伤
@@ -526,6 +534,9 @@ export class GameScene extends Phaser.Scene {
 
         // 更新血条
         this.updateHealthBar();
+
+        // 创建屏幕震动+闪光效果
+        this.screenEffects.shakeAndFlash(15, 0xff0000, 300);
 
         // 创建玩家受伤粒子效果
         this.particleSystem.createPlayerHit(this.player.x, this.player.y);
@@ -666,6 +677,11 @@ export class GameScene extends Phaser.Scene {
         // 清理粒子系统
         if (this.particleSystem) {
             this.particleSystem.destroy();
+        }
+
+        // 清理屏幕特效系统
+        if (this.screenEffects) {
+            this.screenEffects.destroy();
         }
 
         // 清理所有游戏对象
