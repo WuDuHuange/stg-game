@@ -3,6 +3,7 @@
  */
 
 import Phaser from 'phaser';
+import { ParticleSystem } from '@game/ParticleSystem';
 
 export class GameScene extends Phaser.Scene {
     private player!: Phaser.GameObjects.Sprite;
@@ -19,6 +20,7 @@ export class GameScene extends Phaser.Scene {
     private healthBar!: Phaser.GameObjects.Rectangle;
     private healthText!: Phaser.GameObjects.Text;
     private pauseText!: Phaser.GameObjects.Text;
+    private particleSystem!: ParticleSystem;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -55,6 +57,9 @@ export class GameScene extends Phaser.Scene {
         // 创建游戏对象组
         this.bullets = this.add.group();
         this.enemies = this.add.group();
+
+        // 创建粒子系统
+        this.particleSystem = new ParticleSystem(this);
 
         // 创建HUD
         this.createHUD();
@@ -522,6 +527,9 @@ export class GameScene extends Phaser.Scene {
         // 更新血条
         this.updateHealthBar();
 
+        // 创建玩家受伤粒子效果
+        this.particleSystem.createPlayerHit(this.player.x, this.player.y);
+
         // 闪烁效果（保存原始颜色）
         const originalColor = this.player.fillColor;
         this.player.setFillStyle(0xff0000);
@@ -635,21 +643,7 @@ export class GameScene extends Phaser.Scene {
      * 创建爆炸效果
      */
     private createExplosion(x: number, y: number): void {
-        const particles = this.add.particles(0, 0, 'default', {
-            x: x,
-            y: y,
-            speed: { min: 50, max: 150 },
-            angle: { min: 0, max: 360 },
-            scale: { start: 1, end: 0 },
-            alpha: { start: 1, end: 0 },
-            lifespan: 500,
-            quantity: 10,
-            tint: 0xff0000
-        });
-
-        this.time.delayedCall(500, () => {
-            particles.destroy();
-        });
+        this.particleSystem.createEnemyDeath(x, y);
     }
 
     /**
@@ -668,6 +662,11 @@ export class GameScene extends Phaser.Scene {
 
         // 停止所有延迟调用
         this.time.removeAllEvents();
+
+        // 清理粒子系统
+        if (this.particleSystem) {
+            this.particleSystem.destroy();
+        }
 
         // 清理所有游戏对象
         if (this.bullets) {
