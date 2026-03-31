@@ -9,6 +9,8 @@ export class MenuScene extends Phaser.Scene {
     private startButton!: Phaser.GameObjects.Container;
     private settingsButton!: Phaser.GameObjects.Container;
     private exitButton!: Phaser.GameObjects.Container;
+    private versionText!: Phaser.GameObjects.Text;
+    private particles!: Phaser.GameObjects.Particles.ParticleEmitter;
 
     constructor() {
         super({ key: 'MenuScene' });
@@ -191,7 +193,7 @@ export class MenuScene extends Phaser.Scene {
      */
     private createParticles(): void {
         // 创建粒子管理器
-        const particles = this.add.particles(0, 0, 'default', {
+        this.particles = this.add.particles(0, 0, 'default', {
             x: { min: 0, max: this.cameras.main.width },
             y: { min: 0, max: this.cameras.main.height },
             speed: 50,
@@ -201,6 +203,17 @@ export class MenuScene extends Phaser.Scene {
             frequency: 500,
             tint: 0xe94560
         });
+
+        // 创建版本信息
+        this.versionText = this.add.text(
+            this.cameras.main.width - 10,
+            this.cameras.main.height - 10,
+            'v1.0.0',
+            {
+                fontSize: '12px',
+                color: '#666666'
+            }
+        ).setOrigin(1, 1);
     }
 
     /**
@@ -236,8 +249,10 @@ export class MenuScene extends Phaser.Scene {
         // 停止所有动画
         this.tweens.killAll();
 
-        // 清理所有粒子
-        this.scene.getScene('MenuScene')?.particles?.destroy();
+        // 清理粒子
+        if (this.particles) {
+            this.particles.destroy();
+        }
 
         super.destroy();
     }
