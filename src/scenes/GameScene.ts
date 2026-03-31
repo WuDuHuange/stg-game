@@ -28,6 +28,9 @@ export class GameScene extends Phaser.Scene {
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
     private gameOver: boolean = false;
     private playerInvincible: boolean = false;
+    private comboCount: number = 0;
+    private comboTimer!: Phaser.Time.TimerEvent;
+    private lastKillTime: number = 0;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -351,8 +354,8 @@ export class GameScene extends Phaser.Scene {
 
         this.bullets.add(bullet);
 
-        // 添加射击音效（可选）
-        // this.sound.play('shoot');
+        // 创建发射特效
+        this.particleSystem.createBulletMuzzle(this.player.x, this.player.y - 20);
     }
 
     /**
@@ -466,6 +469,23 @@ export class GameScene extends Phaser.Scene {
                 const score = enemy.getData('score');
                 this.score += score;
                 this.scoreText.setText(`分数: ${this.score}`);
+
+                // 连击系统
+                this.comboCount++;
+                this.lastKillTime = Date.now();
+
+                // 重置连击计时器
+                if (this.comboTimer) {
+                    this.comboTimer.destroy();
+                }
+                this.comboTimer = this.time.delayedCall(2000, () => {
+                    this.comboCount = 0;
+                });
+
+                // 显示连击特效（连击数大于2时）
+                if (this.comboCount >= 2) {
+                    this.particleSystem.createComboEffect(enemy.x, enemy.y, this.comboCount);
+                }
 
                 // 添加爆炸效果
                 this.createExplosion(enemy.x, enemy.y);
@@ -595,6 +615,11 @@ export class GameScene extends Phaser.Scene {
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
             this.enemySpawnTimer = null!;
+        }
+
+        // 停止连击计时器
+        if (this.comboTimer) {
+            this.comboTimer.destroy();
         }
 
         // 停止所有动画
