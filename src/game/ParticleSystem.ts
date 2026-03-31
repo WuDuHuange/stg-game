@@ -331,6 +331,190 @@ export class ParticleSystem {
     }
 
     /**
+     * 创建环境光效（背景动态光效）
+     */
+    public createAmbientLight(): void {
+        const ambientLight = this.scene.add.graphics();
+        ambientLight.fillGradientStyle(0x0a0a15, 0x0a0a15, 0x1a1a2e, 0x1a1a2e, 0.1);
+
+        // 创建呼吸效果
+        this.scene.tweens.add({
+            targets: { alpha: 0.3 },
+            alpha: 0.1,
+            duration: 3000,
+            yoyo: true,
+            repeat: -1,
+            onUpdate: (tween, targets) => {
+                ambientLight.fillGradientStyle(
+                    0x0a0a15,
+                    0x0a0a15,
+                    0x1a1a2e,
+                    0x1a1a2e,
+                    targets.alpha
+                );
+            }
+        });
+    }
+
+    /**
+     * 创建天气效果（雨滴）
+     */
+    public createRainEffect(): void {
+        // 创建雨滴粒子
+        for (let i = 0; i < 50; i++) {
+            const rainDrop = this.scene.add.rectangle(
+                Phaser.Math.Between(0, this.scene.cameras.main.width),
+                Phaser.Math.Between(-50, 0),
+                2,
+                0x6699cc,
+                0.6
+            );
+
+            this.scene.tweens.add({
+                targets: rainDrop,
+                y: this.scene.cameras.main.height + 100,
+                duration: Phaser.Math.Between(2000, 4000),
+                delay: Phaser.Math.Between(0, 2000),
+                repeat: -1,
+                ease: 'Linear'
+            });
+        }
+    }
+
+    /**
+     * 创建时间流逝效果
+     */
+    public createTimeEffect(): void {
+        // 创建时间指示器（太阳/月亮）
+        const timeIndicator = this.scene.add.circle(
+            this.scene.cameras.main.width - 80,
+            80,
+            30,
+            0xffd700,
+            0.8
+        );
+
+        // 添加光晕
+        const glow = this.scene.add.circle(
+            this.scene.cameras.main.width - 80,
+            80,
+            50,
+            0xffd700,
+            0.3
+        );
+
+        // 脉动效果
+        this.scene.tweens.add({
+            targets: timeIndicator,
+            y: 80 + Math.sin(Date.now() / 5000) * 10,
+            duration: 10000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    /**
+     * 创建能量场效果
+     */
+    public createEnergyField(x: number, y: number, radius: number = 100): void {
+        const field = this.scene.add.circle(x, y, radius, 0x00ffff, 0.1);
+
+        this.scene.tweens.add({
+            targets: field,
+            scale: 1.2,
+            alpha: 0.2,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    /**
+     * 创建传送门效果
+     */
+    public createPortal(x: number, y: number): void {
+        // 外圈
+        const outerRing = this.scene.add.circle(x, y, 40, 0x9932cc, 0.5);
+        outerRing.setStrokeStyle(3, 0x6622aa);
+
+        // 内圈
+        const innerRing = this.scene.add.circle(x, y, 25, 0x9932cc, 0.8);
+
+        // 旋转效果
+        this.scene.tweens.add({
+            targets: outerRing,
+            angle: 360,
+            duration: 2000,
+            repeat: -1,
+            ease: 'Linear'
+        });
+
+        // 脉动效果
+        this.scene.tweens.add({
+            targets: innerRing,
+            scale: 1.3,
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // 粒子效果
+        for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 / 12) * i;
+            const particle = this.scene.add.circle(
+                x + Math.cos(angle) * 30,
+                y + Math.sin(angle) * 30,
+                3,
+                0xccffcc
+            );
+
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * 50,
+                y: y + Math.sin(angle) * 50,
+                scale: 0,
+                alpha: 0,
+                duration: 1000,
+                delay: i * 50,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
+    /**
+     * 创建警告区域效果
+     */
+    public createWarningZone(x: number, y: number, radius: number = 150): void {
+        const zone = this.scene.add.circle(x, y, radius, 0xff0000, 0.2);
+        zone.setStrokeStyle(3, 0xff0000);
+
+        // 脉动边框
+        this.scene.tweens.add({
+            targets: zone,
+            alpha: 0.1,
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // 波纹效果
+        this.scene.tweens.add({
+            targets: zone,
+            scale: 1.1,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+    }
+
+    /**
      * 清理所有粒子
      */
     public clearAll(): void {

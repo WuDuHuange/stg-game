@@ -94,7 +94,7 @@ export class GameScene extends Phaser.Scene {
             const y = Phaser.Math.Between(0, this.cameras.main.height);
             const size = Phaser.Math.Between(1, 2);
             const star = this.add.circle(x, y, size, 0xffffff, Phaser.Math.FloatBetween(0.3, 0.7));
-            
+
             // 添加移动动画
             this.tweens.add({
                 targets: star,
@@ -104,6 +104,12 @@ export class GameScene extends Phaser.Scene {
                 ease: 'Linear'
             });
         }
+
+        // 创建环境光效
+        this.particleSystem.createAmbientLight();
+
+        // 创建时间指示器
+        this.particleSystem.createTimeEffect();
     }
 
     /**
@@ -392,16 +398,22 @@ export class GameScene extends Phaser.Scene {
         const x = Phaser.Math.Between(30, this.cameras.main.width - 30);
         const y = -30;
 
-        const enemy = this.add.circle(x, y, 15, 0xff0000);
-        enemy.setData('speed', Phaser.Math.Between(50, 150));
-        enemy.setData('health', 20);
-        enemy.setData('maxHealth', 20);
-        enemy.setData('score', 100);
+        // 创建警告区域（敌人生成前2秒显示）
+        this.particleSystem.createWarningZone(x, this.cameras.main.height / 2, 100);
 
-        // 添加敌人光晕
-        const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
+        // 延迟生成敌人（警告后2秒）
+        this.time.delayedCall(2000, () => {
+            const enemy = this.add.circle(x, y, 15, 0xff0000);
+            enemy.setData('speed', Phaser.Math.Between(50, 150));
+            enemy.setData('health', 20);
+            enemy.setData('maxHealth', 20);
+            enemy.setData('score', 100);
 
-        this.enemies.add(enemy);
+            // 添加敌人光晕
+            const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
+
+            this.enemies.add(enemy);
+        });
     }
 
     /**
