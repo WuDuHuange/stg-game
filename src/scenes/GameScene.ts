@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { ParticleSystem } from '@game/ParticleSystem';
 import { ScreenEffects } from '@game/ScreenEffects';
 import { SceneManager } from '@game/SceneManager';
+import { EquipmentUI } from '@ui/EquipmentUI';
 
 export class GameScene extends Phaser.Scene {
     private player!: Phaser.GameObjects.Sprite;
@@ -14,6 +15,7 @@ export class GameScene extends Phaser.Scene {
     private wasd!: any;
     private spaceKey!: Phaser.Input.Keyboard.Key;
     private escKey!: Phaser.Input.Keyboard.Key;
+    private eKey!: Phaser.Input.Keyboard.Key;
     private instructions!: Phaser.GameObjects.Text[];
     private bullets!: Phaser.GameObjects.Group;
     private enemies!: Phaser.GameObjects.Group;
@@ -25,6 +27,7 @@ export class GameScene extends Phaser.Scene {
     private particleSystem!: ParticleSystem;
     private screenEffects!: ScreenEffects;
     private sceneManager!: SceneManager;
+    private equipmentUI!: EquipmentUI;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -74,6 +77,10 @@ export class GameScene extends Phaser.Scene {
         // 创建场景管理器
         this.sceneManager = new SceneManager(this);
         this.sceneManager.initialize();
+
+        // 创建装备UI
+        this.equipmentUI = new EquipmentUI(this);
+        this.equipmentUI.initialize();
 
         // 创建HUD
         this.createHUD();
@@ -160,10 +167,16 @@ export class GameScene extends Phaser.Scene {
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D');
         this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+        this.eKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
         // ESC键返回主菜单
         this.escKey.on('down', () => {
             this.scene.start('MenuScene');
+        });
+
+        // E键打开/关闭装备UI
+        this.eKey.on('down', () => {
+            this.equipmentUI.show();
         });
     }
 
@@ -714,6 +727,11 @@ export class GameScene extends Phaser.Scene {
      */
     destroy(): void {
         console.log('GameScene: 场景销毁');
+
+        // 清理装备UI
+        if (this.equipmentUI) {
+            this.equipmentUI.destroy();
+        }
 
         // 清理场景管理器
         if (this.sceneManager) {
