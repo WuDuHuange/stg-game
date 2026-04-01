@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { ParticleSystem } from '@game/ParticleSystem';
 import { ScreenEffects } from '@game/ScreenEffects';
+import { SceneManager } from '@game/SceneManager';
 
 export class GameScene extends Phaser.Scene {
     private player!: Phaser.GameObjects.Sprite;
@@ -23,6 +24,7 @@ export class GameScene extends Phaser.Scene {
     private pauseText!: Phaser.GameObjects.Text;
     private particleSystem!: ParticleSystem;
     private screenEffects!: ScreenEffects;
+    private sceneManager!: SceneManager;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -69,14 +71,24 @@ export class GameScene extends Phaser.Scene {
         // 创建屏幕特效系统
         this.screenEffects = new ScreenEffects(this);
 
+        // 创建场景管理器
+        this.sceneManager = new SceneManager(this);
+        this.sceneManager.initialize();
+
         // 创建HUD
         this.createHUD();
+
+        // 显示关卡标题
+        this.sceneManager.showLevelTitle('第 1 关', 1500);
 
         // 显示提示信息
         this.showInstructions();
 
         // 开始生成敌人
         this.startEnemySpawning();
+
+        // 淡入效果
+        this.sceneManager.fadeIn(800);
     }
 
     /**
@@ -623,6 +635,9 @@ export class GameScene extends Phaser.Scene {
     private handleGameOver(): void {
         console.log('GameScene: 游戏结束，分数:', this.score);
 
+        // 淡出效果
+        this.sceneManager.fadeOut(500);
+
         // 停止生成敌人
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
@@ -699,6 +714,11 @@ export class GameScene extends Phaser.Scene {
      */
     destroy(): void {
         console.log('GameScene: 场景销毁');
+
+        // 清理场景管理器
+        if (this.sceneManager) {
+            this.sceneManager.destroy();
+        }
 
         // 停止所有定时器
         if (this.enemySpawnTimer) {
