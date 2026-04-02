@@ -489,7 +489,7 @@ export class ParticleSystem {
     /**
      * 创建警告区域效果
      */
-    public createWarningZone(x: number, y: number, radius: number = 150): void {
+    public createWarningZone(x: number, y: number, duration: number = 2000, radius: number = 150): Phaser.GameObjects.Circle {
         const zone = this.scene.add.circle(x, y, radius, 0xff0000, 0.2);
         zone.setStrokeStyle(3, 0xff0000);
 
@@ -499,7 +499,7 @@ export class ParticleSystem {
             alpha: 0.1,
             duration: 500,
             yoyo: true,
-            repeat: -1,
+            repeat: Math.floor(duration / 1000),
             ease: 'Sine.easeInOut'
         });
 
@@ -509,9 +509,18 @@ export class ParticleSystem {
             scale: 1.1,
             duration: 1000,
             yoyo: true,
-            repeat: -1,
+            repeat: Math.floor(duration / 2000),
             ease: 'Sine.easeInOut'
         });
+
+        // 自动销毁
+        this.scene.time.delayedCall(duration, () => {
+            if (zone && zone.active) {
+                zone.destroy();
+            }
+        });
+
+        return zone;
     }
 
     /**

@@ -423,8 +423,8 @@ export class GameScene extends Phaser.Scene {
         const x = Phaser.Math.Between(30, this.cameras.main.width - 30);
         const y = -30;
 
-        // 创建警告区域（敌人生成前2秒显示）
-        this.particleSystem.createWarningZone(x, this.cameras.main.height / 2, 100);
+        // 创建警告区域（敌人生成前2秒显示，2秒后自动销毁）
+        this.particleSystem.createWarningZone(x, this.cameras.main.height / 2, 2000, 100);
 
         // 延迟生成敌人（警告后2秒）
         this.time.delayedCall(2000, () => {
