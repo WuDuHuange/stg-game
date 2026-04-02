@@ -423,22 +423,17 @@ export class GameScene extends Phaser.Scene {
         const x = Phaser.Math.Between(30, this.cameras.main.width - 30);
         const y = -30;
 
-        // 创建警告区域（敌人生成前2秒显示，2秒后自动销毁）
-        this.particleSystem.createWarningZone(x, this.cameras.main.height / 2, 2000, 100);
+        // 直接生成敌人（不显示警告区域）
+        const enemy = this.add.circle(x, y, 15, 0xff0000);
+        enemy.setData('speed', Phaser.Math.Between(50, 150));
+        enemy.setData('health', 20);
+        enemy.setData('maxHealth', 20);
+        enemy.setData('score', 100);
 
-        // 延迟生成敌人（警告后2秒）
-        this.time.delayedCall(2000, () => {
-            const enemy = this.add.circle(x, y, 15, 0xff0000);
-            enemy.setData('speed', Phaser.Math.Between(50, 150));
-            enemy.setData('health', 20);
-            enemy.setData('maxHealth', 20);
-            enemy.setData('score', 100);
+        // 添加敌人光晕
+        const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
 
-            // 添加敌人光晕
-            const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
-
-            this.enemies.add(enemy);
-        });
+        this.enemies.add(enemy);
     }
 
     /**

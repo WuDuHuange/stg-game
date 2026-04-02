@@ -524,6 +524,94 @@ export class ParticleSystem {
     }
 
     /**
+     * 创建激光警告（竖线）
+     */
+    public createLaserWarning(x: number, duration: number = 1500): Phaser.GameObjects.Rectangle {
+        const laser = this.scene.add.rectangle(
+            x,
+            this.scene.cameras.main.height / 2,
+            20,
+            this.scene.cameras.main.height,
+            0xff0000,
+            0.3
+        );
+
+        // 闪烁效果
+        this.scene.tweens.add({
+            targets: laser,
+            alpha: 0.6,
+            duration: 200,
+            yoyo: true,
+            repeat: Math.floor(duration / 400),
+            ease: 'Sine.easeInOut'
+        });
+
+        // 自动销毁
+        this.scene.time.delayedCall(duration, () => {
+            if (laser && laser.active) {
+                laser.destroy();
+            }
+        });
+
+        return laser;
+    }
+
+    /**
+     * 创建范围爆炸警告（大圆圈）
+     */
+    public createExplosionWarning(x: number, y: number, duration: number = 2000, radius: number = 200): Phaser.GameObjects.Circle {
+        const warning = this.scene.add.circle(x, y, radius, 0xff6600, 0.3);
+        warning.setStrokeStyle(5, 0xff6600);
+
+        // 快速脉动
+        this.scene.tweens.add({
+            targets: warning,
+            scale: 0.9,
+            alpha: 0.5,
+            duration: 300,
+            yoyo: true,
+            repeat: Math.floor(duration / 600),
+            ease: 'Sine.easeInOut'
+        });
+
+        // 自动销毁
+        this.scene.time.delayedCall(duration, () => {
+            if (warning && warning.active) {
+                warning.destroy();
+            }
+        });
+
+        return warning;
+    }
+
+    /**
+     * 创建矩形区域警告（用于Boss技能等）
+     */
+    public createRectWarning(x: number, y: number, width: number, height: number, duration: number = 2000): Phaser.GameObjects.Rectangle {
+        const rect = this.scene.add.rectangle(x, y, width, height, 0xff0000, 0.2);
+        rect.setStrokeStyle(3, 0xff0000);
+
+        // 波纹边框效果
+        this.scene.tweens.add({
+            targets: rect,
+            alpha: 0.4,
+            duration: 500,
+            yoyo: true,
+            repeat: Math.floor(duration / 1000),
+            ease: 'Sine.easeInOut'
+        });
+
+        // 自动销毁
+        this.scene.time.delayedCall(duration, () => {
+            if (rect && rect.active) {
+                rect.destroy();
+            }
+        });
+
+        return rect;
+    }
+
+    /**
      * 清理所有粒子
      */
     public clearAll(): void {
