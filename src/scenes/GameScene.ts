@@ -55,15 +55,6 @@ export class GameScene extends Phaser.Scene {
     create(): void {
         console.log('GameScene: 场景创建');
 
-        // 创建背景
-        this.createBackground();
-
-        // 创建玩家
-        this.createPlayer();
-
-        // 设置输入
-        this.setupInput();
-
         // 创建游戏对象组
         this.bullets = this.add.group();
         this.enemies = this.add.group();
@@ -77,6 +68,15 @@ export class GameScene extends Phaser.Scene {
         // 创建场景管理器
         this.sceneManager = new SceneManager(this);
         this.sceneManager.initialize();
+
+        // 创建背景
+        this.createBackground();
+
+        // 创建玩家
+        this.createPlayer();
+
+        // 设置输入
+        this.setupInput();
 
         // 创建装备UI
         this.equipmentUI = new EquipmentUI(this);
