@@ -403,10 +403,20 @@ export class ParticleSystem {
             0.3
         );
 
-        // 脉动效果
+        // 脉动效果 - 上下移动
         this.scene.tweens.add({
             targets: timeIndicator,
-            y: 80 + Math.sin(Date.now() / 5000) * 10,
+            y: 90,  // 向下移动10像素
+            duration: 10000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // 光晕也跟随脉动
+        this.scene.tweens.add({
+            targets: glow,
+            y: 90,  // 向下移动10像素
             duration: 10000,
             yoyo: true,
             repeat: -1,
