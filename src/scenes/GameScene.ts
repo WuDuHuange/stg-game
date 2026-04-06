@@ -7,6 +7,7 @@ import { ParticleSystem } from '@game/ParticleSystem';
 import { ScreenEffects } from '@game/ScreenEffects';
 import { SceneManager } from '@game/SceneManager';
 import { SkillUI } from '@ui/SkillUI';
+import { SettingsUI } from '@ui/SettingsUI';
 import { EquipmentUI } from '@ui/EquipmentUI';
 
 export class GameScene extends Phaser.Scene {
@@ -18,6 +19,7 @@ export class GameScene extends Phaser.Scene {
     private escKey!: Phaser.Input.Keyboard.Key;
     private eKey!: Phaser.Input.Keyboard.Key;
     private kKey!: Phaser.Input.Keyboard.Key;
+    private oKey!: Phaser.Input.Keyboard.Key;
     private instructions!: Phaser.GameObjects.Text[];
     private bullets!: Phaser.GameObjects.Group;
     private enemies!: Phaser.GameObjects.Group;
@@ -31,6 +33,7 @@ export class GameScene extends Phaser.Scene {
     private sceneManager!: SceneManager;
     private equipmentUI!: EquipmentUI;
     private skillUI!: SkillUI;
+    private settingsUI!: SettingsUI;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -75,6 +78,10 @@ export class GameScene extends Phaser.Scene {
         // 创建技能UI
         this.skillUI = new SkillUI(this);
         this.skillUI.initialize();
+
+        // 创建设置UI
+        this.settingsUI = new SettingsUI(this);
+        this.settingsUI.initialize();
 
         // 创建背景
         this.createBackground();
@@ -176,6 +183,7 @@ export class GameScene extends Phaser.Scene {
         this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
         this.eKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
         this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K);
+        this.oKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
 
         // ESC键返回主菜单
         this.escKey.on('down', () => {
@@ -190,6 +198,11 @@ export class GameScene extends Phaser.Scene {
         // K键打开/关闭技能UI
         this.kKey.on('down', () => {
             this.skillUI.toggle();
+        });
+
+        // O键打开/关闭设置UI
+        this.oKey.on('down', () => {
+            this.settingsUI.toggle();
         });
     }
 
@@ -749,6 +762,11 @@ export class GameScene extends Phaser.Scene {
         // 清理技能UI
         if (this.skillUI) {
             this.skillUI.destroy();
+        }
+
+        // 清理设置UI
+        if (this.settingsUI) {
+            this.settingsUI.destroy();
         }
 
         // 停止所有定时器
