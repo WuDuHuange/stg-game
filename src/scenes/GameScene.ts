@@ -8,6 +8,7 @@ import { ScreenEffects } from '@game/ScreenEffects';
 import { SceneManager } from '@game/SceneManager';
 import { SkillUI } from '@ui/SkillUI';
 import { SettingsUI } from '@ui/SettingsUI';
+import { PauseUI } from '@ui/PauseUI';
 import { EquipmentUI } from '@ui/EquipmentUI';
 
 export class GameScene extends Phaser.Scene {
@@ -34,6 +35,7 @@ export class GameScene extends Phaser.Scene {
     private equipmentUI!: EquipmentUI;
     private skillUI!: SkillUI;
     private settingsUI!: SettingsUI;
+    private pauseUI!: PauseUI;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -82,6 +84,10 @@ export class GameScene extends Phaser.Scene {
         // 创建设置UI
         this.settingsUI = new SettingsUI(this);
         this.settingsUI.initialize();
+
+        // 创建暂停UI
+        this.pauseUI = new PauseUI(this);
+        this.pauseUI.initialize();
 
         // 创建背景
         this.createBackground();
@@ -185,9 +191,13 @@ export class GameScene extends Phaser.Scene {
         this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K);
         this.oKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
 
-        // ESC键返回主菜单
+        // ESC键切换暂停
         this.escKey.on('down', () => {
-            this.scene.start('MenuScene');
+            if (this.pauseUI.isGamePaused()) {
+                this.pauseUI.resume();
+            } else {
+                this.pauseUI.pause();
+            }
         });
 
         // E键打开/关闭装备UI
@@ -767,6 +777,11 @@ export class GameScene extends Phaser.Scene {
         // 清理设置UI
         if (this.settingsUI) {
             this.settingsUI.destroy();
+        }
+
+        // 清理暂停UI
+        if (this.pauseUI) {
+            this.pauseUI.destroy();
         }
 
         // 停止所有定时器
