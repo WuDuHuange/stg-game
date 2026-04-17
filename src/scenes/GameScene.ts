@@ -9,6 +9,7 @@ import { SceneManager } from '@game/SceneManager';
 import { SkillUI } from '@ui/SkillUI';
 import { SettingsUI } from '@ui/SettingsUI';
 import { PauseUI } from '@ui/PauseUI';
+import { ResultUI } from '@ui/ResultUI';
 import { EquipmentUI } from '@ui/EquipmentUI';
 
 export class GameScene extends Phaser.Scene {
@@ -36,6 +37,7 @@ export class GameScene extends Phaser.Scene {
     private skillUI!: SkillUI;
     private settingsUI!: SettingsUI;
     private pauseUI!: PauseUI;
+    private resultUI!: ResultUI;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200; // 射击冷却时间（毫秒）
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
@@ -88,6 +90,10 @@ export class GameScene extends Phaser.Scene {
         // 创建暂停UI
         this.pauseUI = new PauseUI(this);
         this.pauseUI.initialize();
+
+        // 创建结算UI
+        this.resultUI = new ResultUI(this);
+        this.resultUI.initialize();
 
         // 创建背景
         this.createBackground();
@@ -679,9 +685,6 @@ export class GameScene extends Phaser.Scene {
     private handleGameOver(): void {
         console.log('GameScene: 游戏结束，分数:', this.score);
 
-        // 淡出效果
-        this.sceneManager.fadeOut(500);
-
         // 停止生成敌人
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
@@ -693,56 +696,14 @@ export class GameScene extends Phaser.Scene {
             this.comboTimer.destroy();
         }
 
-        // 停止所有动画
-        this.tweens.killAll();
-
-        // 显示游戏结束界面
-        const gameOverBg = this.add.rectangle(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2,
-            600,
-            400,
-            0x000000,
-            0.9
-        );
-
-        const gameOverText = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2 - 50,
-            '游戏结束',
-            {
-                fontSize: '48px',
-                color: '#ff0000',
-                fontStyle: 'bold'
-            }
-        ).setOrigin(0.5);
-
-        const finalScoreText = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2 + 20,
-            `最终分数: ${this.score}`,
-            {
-                fontSize: '32px',
-                color: '#ffffff'
-            }
-        ).setOrigin(0.5);
-
-        const restartText = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2 + 100,
-            '按 ESC 返回主菜单',
-            {
-                fontSize: '24px',
-                color: '#ffffff',
-                fontStyle: 'bold'
-            }
-        ).setOrigin(0.5);
-
-        // ESC键返回主菜单
-        this.escKey.removeAllListeners();
-        this.escKey.on('down', () => {
-            console.log('GameScene: 返回主菜单');
-            this.scene.start('MenuScene');
+        // 显示结算界面
+        this.resultUI.showResult({
+            isVictory: false,
+            score: this.score,
+            enemiesKilled: Math.floor(this.score / 100),
+            maxCombo: this.comboCount,
+            timeElapsed: this.time.now / 1000,
+            level: 1
         });
     }
 
@@ -782,6 +743,11 @@ export class GameScene extends Phaser.Scene {
         // 清理暂停UI
         if (this.pauseUI) {
             this.pauseUI.destroy();
+        }
+
+        // 清理结算UI
+        if (this.resultUI) {
+            this.resultUI.destroy();
         }
 
         // 停止所有定时器
