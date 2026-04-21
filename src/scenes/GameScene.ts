@@ -45,6 +45,7 @@ export class GameScene extends Phaser.Scene {
     private playerInvincible: boolean = false;
     private comboCount: number = 0;
     private comboTimer!: Phaser.Time.TimerEvent;
+    private comboText!: Phaser.GameObjects.Text;
     private lastKillTime: number = 0;
 
     constructor() {
@@ -274,7 +275,7 @@ export class GameScene extends Phaser.Scene {
         this.pauseText = this.add.text(
             this.cameras.main.width / 2,
             this.cameras.main.height - 20,
-            'ESC 返回主菜单',
+            'ESC 暂停 | E 装备 | K 技能 | O 设置',
             {
                 fontSize: '14px',
                 color: '#666666',
@@ -297,6 +298,37 @@ export class GameScene extends Phaser.Scene {
                 });
             }
         });
+
+        // 创建关卡进度提示
+        this.createLevelProgress();
+    }
+
+    /**
+     * 创建关卡进度提示
+     */
+    private createLevelProgress(): void {
+        // 关卡信息（左下角）
+        const levelText = this.add.text(
+            10,
+            this.cameras.main.height - 50,
+            '第 1 关 - 初次接触',
+            {
+                fontSize: '14px',
+                color: '#aaaaaa'
+            }
+        );
+
+        // 连击显示（当连击数>0时显示）
+        this.comboText = this.add.text(
+            10,
+            this.cameras.main.height - 30,
+            '',
+            {
+                fontSize: '16px',
+                color: '#ffff00',
+                fontStyle: 'bold'
+            }
+        );
     }
 
     /**
@@ -346,6 +378,16 @@ export class GameScene extends Phaser.Scene {
         if (this.gameOver) return;
 
         if (!this.player || !this.player.active) return;
+
+        // 更新连击显示
+        if (this.comboText && this.comboText.active) {
+            if (this.comboCount >= 2) {
+                this.comboText.setText(`${this.comboCount} COMBO`);
+                this.comboText.setAlpha(1);
+            } else {
+                this.comboText.setAlpha(0);
+            }
+        }
 
         const speed = this.player.getData('speed');
         let velocityX = 0;

@@ -3,6 +3,7 @@
  */
 
 import Phaser from 'phaser';
+import { SettingsUI } from '@ui/SettingsUI';
 
 export class MenuScene extends Phaser.Scene {
     private titleText!: Phaser.GameObjects.Text;
@@ -11,6 +12,7 @@ export class MenuScene extends Phaser.Scene {
     private exitButton!: Phaser.GameObjects.Container;
     private versionText!: Phaser.GameObjects.Text;
     private particles!: Phaser.GameObjects.Particles.ParticleEmitter;
+    private settingsUI!: SettingsUI;
 
     constructor() {
         super({ key: 'MenuScene' });
@@ -30,6 +32,10 @@ export class MenuScene extends Phaser.Scene {
 
         // 创建菜单按钮
         this.createMenuButtons();
+
+        // 创建设置UI
+        this.settingsUI = new SettingsUI(this);
+        this.settingsUI.initialize();
 
         // 添加粒子效果
         this.createParticles();
@@ -229,7 +235,7 @@ export class MenuScene extends Phaser.Scene {
      */
     private openSettings(): void {
         console.log('打开设置');
-        // TODO: 实现设置界面
+        this.settingsUI.show();
     }
 
     /**
@@ -245,6 +251,11 @@ export class MenuScene extends Phaser.Scene {
      */
     destroy(): void {
         console.log('MenuScene: 场景销毁');
+
+        // 清理设置UI
+        if (this.settingsUI) {
+            this.settingsUI.destroy();
+        }
 
         // 停止所有动画
         this.tweens.killAll();
