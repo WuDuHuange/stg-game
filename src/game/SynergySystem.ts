@@ -260,7 +260,9 @@ export class SynergySystem {
   /**
    * 获取所有协同效果数据
    */
-  public getAllSynergyData(): Map<string, SynergyData> = new Map(this.synergyDatabase);
+  public getAllSynergyData(): Map<string, SynergyData> {
+    return new Map(this.synergyDatabase);
+  }
 
   /**
    * 计算协同效果加成

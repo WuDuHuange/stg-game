@@ -8,6 +8,8 @@ export class EquipmentUI {
     private equipmentSlots: Map<string, Phaser.GameObjects.Container> = new Map();
     private equipmentData: Map<string, any> = new Map();
     private isVisible: boolean = false;
+    private selectedSlot: string = '头部';
+    private onEnhance?: (slotName: string, newLevel: number) => void;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -97,6 +99,7 @@ export class EquipmentUI {
             // 添加点击事件
             slotBg.setInteractive({ useHandCursor: true });
             slotBg.on('pointerdown', () => {
+                this.selectedSlot = name;
                 this.showEquipmentDetail(name);
             });
 
@@ -256,19 +259,31 @@ export class EquipmentUI {
     }
 
     /**
-     * 获取装备数据（模拟）
+     * 获取装备数据
      */
     private getEquipmentData(slotName: string): any {
-        // 模拟装备数据
-        const mockData = {
-            '头部': { name: '战术头盔', attack: 10, defense: 20, agility: 5, level: 2, rarity: 'RARE' },
-            '左手': { name: '激光手枪', attack: 30, defense: 5, agility: 10, level: 3, rarity: 'EPIC' },
-            '右手': { name: '能量剑', attack: 40, defense: 5, agility: 15, level: 1, rarity: 'LEGENDARY' },
-            '躯干': { name: '纳米装甲', attack: 5, defense: 30, agility: 5, level: 4, rarity: 'EPIC' },
-            '腿部': { name: '推进靴', attack: 5, defense: 10, agility: 20, level: 2, rarity: 'RARE' }
+        // 初始化装备数据（如果尚未初始化）
+        if (this.equipmentData.size === 0) {
+            this.initEquipmentData();
+        }
+        return this.equipmentData.get(slotName) || null;
+    }
+
+    /**
+     * 初始化装备数据
+     */
+    private initEquipmentData(): void {
+        const defaults = {
+            '头部': { name: '战术头盔', attack: 10, defense: 20, agility: 5, level: 0, maxLevel: 5, rarity: 'RARE' },
+            '左手': { name: '激光手枪', attack: 30, defense: 5, agility: 10, level: 0, maxLevel: 5, rarity: 'EPIC' },
+            '右手': { name: '能量剑', attack: 40, defense: 5, agility: 15, level: 0, maxLevel: 5, rarity: 'LEGENDARY' },
+            '躯干': { name: '纳米装甲', attack: 5, defense: 30, agility: 5, level: 0, maxLevel: 5, rarity: 'EPIC' },
+            '腿部': { name: '推进靴', attack: 5, defense: 10, agility: 20, level: 0, maxLevel: 5, rarity: 'RARE' }
         };
 
-        return mockData[slotName] || null;
+        for (const [key, value] of Object.entries(defaults)) {
+            this.equipmentData.set(key, { ...value });
+        }
     }
 
     /**
@@ -288,11 +303,91 @@ export class EquipmentUI {
      * 强化装备
      */
     private enhanceEquipment(): void {
-        // 模拟强化效果
-        console.log('强化装备');
+        const equipment = this.getEquipmentData(this.selectedSlot);
+        if (!equipment) return;
+
+        // 检查是否已达最大等级
+        if (equipment.level >= equipment.maxLevel) {
+            this.showEnhanceMessage('已达最高强化等级!');
+            return;
+        }
+
+        // 强化：每级提升10%属性
+        const enhanceRate = 0.1;
+        equipment.level++;
+        equipment.attack = Math.round(equipment.attack * (1 + enhanceRate));
+        equipment.defense = Math.round(equipment.defense * (1 + enhanceRate));
+        equipment.agility = Math.round(equipment.agility * (1 + enhanceRate));
+
+        // 更新详情面板
+        this.showEquipmentDetail(this.selectedSlot);
 
         // 创建强化特效
         this.createEnhanceEffect();
+
+        // 显示强化成功消息
+        this.showEnhanceMessage(`强化成功! Lv.${equipment.level}`);
+
+        // 通知外部
+        if (this.onEnhance) {
+            this.onEnhance(this.selectedSlot, equipment.level);
+        }
+    }
+
+    /**
+     * 显示强化消息
+     */
+    private showEnhanceMessage(message: string): void {
+        const centerX = this.scene.cameras.main.width / 2;
+        const centerY = this.scene.cameras.main.height / 2 - 100;
+
+        const msg = this.scene.add.text(centerX, centerY, message, {
+            fontSize: '18px',
+            color: '#ffd700',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.scene.tweens.add({
+            targets: msg,
+            y: centerY - 30,
+            alpha: 0,
+            duration: 1500,
+            ease: 'Power2.easeOut',
+            onComplete: () => msg.destroy()
+        });
+    }
+
+    /**
+     * 设置强化回调
+     */
+    public setEnhanceCallback(callback: (slotName: string, newLevel: number) => void): void {
+        this.onEnhance = callback;
+    }
+
+    /**
+     * 通过击杀数强化所有装备
+     */
+    public enhanceByKill(killCount: number): void {
+        if (this.equipmentData.size === 0) {
+            this.initEquipmentData();
+        }
+
+        // 每10击杀强化一次随机装备
+        if (killCount % 10 !== 0 || killCount === 0) return;
+
+        const slots = Array.from(this.equipmentData.keys());
+        const randomSlot = slots[Math.floor(Math.random() * slots.length)];
+        const equipment = this.equipmentData.get(randomSlot);
+
+        if (equipment && equipment.level < equipment.maxLevel) {
+            const enhanceRate = 0.1;
+            equipment.level++;
+            equipment.attack = Math.round(equipment.attack * (1 + enhanceRate));
+            equipment.defense = Math.round(equipment.defense * (1 + enhanceRate));
+            equipment.agility = Math.round(equipment.agility * (1 + enhanceRate));
+        }
     }
 
     /**

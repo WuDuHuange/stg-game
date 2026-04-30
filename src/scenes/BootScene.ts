@@ -15,13 +15,33 @@ export class BootScene extends Phaser.Scene {
     preload(): void {
         this.createLoadingBar();
 
-        // 这里可以预加载游戏资源
-        // 例如：this.load.image('player', 'assets/textures/player.png');
+        // 代码生成必要纹理（不依赖外部资源文件）
+        this.generateTextures();
+    }
 
-        // 模拟资源加载
-        this.time.delayedCall(1000, () => {
-            this.loadComplete();
-        });
+    /**
+     * 生成必要的纹理资源
+     */
+    private generateTextures(): void {
+        // 玩境光点纹理
+        if (!this.textures.exists('ambient_dot')) {
+            const g = this.add.graphics();
+            g.fillStyle(0xffffff, 1);
+            g.fillCircle(3, 3, 3);
+            g.generateTexture('ambient_dot', 6, 6);
+            g.destroy();
+        }
+
+        // 时间指示器纹理
+        if (!this.textures.exists('time_ring')) {
+            const g = this.add.graphics();
+            g.lineStyle(2, 0xe94560, 0.6);
+            g.strokeCircle(8, 8, 7);
+            g.fillStyle(0xe94560, 0.3);
+            g.fillCircle(8, 8, 5);
+            g.generateTexture('time_ring', 16, 16);
+            g.destroy();
+        }
     }
 
     /**
@@ -30,6 +50,13 @@ export class BootScene extends Phaser.Scene {
     private createLoadingBar(): void {
         const width = this.cameras.main.width;
         const height = this.cameras.main.height;
+
+        // 标题
+        this.add.text(width / 2, height / 2 - 40, 'STG 机娘游戏', {
+            fontSize: '32px',
+            color: '#e94560',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
 
         // 创建进度条背景
         const progressBar = this.add.graphics();
@@ -55,15 +82,10 @@ export class BootScene extends Phaser.Scene {
     }
 
     /**
-     * 加载完成
+     * 场景创建 - 加载完成后初始化并跳转
      */
-    private loadComplete(): void {
-        console.log('BootScene: 资源加载完成');
-        
-        // 初始化游戏配置
+    create(): void {
         this.initGameConfig();
-
-        // 跳转到主菜单
         this.scene.start('MenuScene');
     }
 
@@ -71,14 +93,14 @@ export class BootScene extends Phaser.Scene {
      * 初始化游戏配置
      */
     private initGameConfig(): void {
-        // 这里可以初始化游戏的全局配置
-        // 例如：音量设置、难度设置等
-    }
+        // 设置物理引擎默认配置
+        if (this.physics && this.physics.world) {
+            this.physics.world.setBounds(0, 0, this.cameras.main.width, this.cameras.main.height);
+        }
 
-    /**
-     * 场景创建
-     */
-    create(): void {
-        console.log('BootScene: 场景创建');
+        // 设置输入配置
+        if (this.input && this.input.mouse) {
+            this.input.mouse.disableContextMenu();
+        }
     }
 }

@@ -13,6 +13,8 @@ export class TimeManager {
     private unscaledTime: number = 0;
     private frameCount: number = 0;
     private targetFPS: number = 60;
+    private timers: Map<number, { callback: () => void; targetTime: number; interval?: number; }> = new Map();
+    private nextTimerId: number = 1;
 
     private constructor() {}
 
@@ -34,6 +36,7 @@ export class TimeManager {
         this.totalTime += this.deltaTime;
         this.unscaledTime += realDeltaTime;
         this.frameCount++;
+        this.processTimers();
     }
 
     /**
@@ -47,7 +50,7 @@ export class TimeManager {
      * 获取未缩放的deltaTime
      */
     public getUnscaledDeltaTime(): number {
-        return this.deltaTime / this.timeScale;
+        return this.timeScale !== 0 ? this.deltaTime / this.timeScale : 0;
     }
 
     /**
@@ -167,13 +170,9 @@ export class TimeManager {
      * 创建定时器
      */
     public setTimeout(callback: () => void, delay: number): number {
-        const targetTime = this.totalTime + delay;
-        const timerId = Date.now() + Math.random();
-
-        // 这里需要实现定时器逻辑
-        // 实际使用时需要在update中检查定时器
-        logger.info(`Timer created: ID=${timerId}, Delay=${delay}s`);
-
+        const timerId = this.nextTimerId++;
+        const targetTime = this.totalTime + delay / 1000;
+        this.timers.set(timerId, { callback, targetTime });
         return timerId;
     }
 
@@ -181,12 +180,9 @@ export class TimeManager {
      * 创建间隔定时器
      */
     public setInterval(callback: () => void, interval: number): number {
-        const timerId = Date.now() + Math.random();
-
-        // 这里需要实现间隔定时器逻辑
-        // 实际使用时需要在update中检查定时器
-        logger.info(`Interval timer created: ID=${timerId}, Interval=${interval}s`);
-
+        const timerId = this.nextTimerId++;
+        const targetTime = this.totalTime + interval / 1000;
+        this.timers.set(timerId, { callback, targetTime, interval: interval / 1000 });
         return timerId;
     }
 
@@ -194,14 +190,36 @@ export class TimeManager {
      * 清除定时器
      */
     public clearTimeout(timerId: number): void {
-        logger.info(`Timer cleared: ID=${timerId}`);
+        this.timers.delete(timerId);
     }
 
     /**
      * 清除间隔定时器
      */
     public clearInterval(timerId: number): void {
-        logger.info(`Interval timer cleared: ID=${timerId}`);
+        this.timers.delete(timerId);
+    }
+
+    /**
+     * 检查并执行到期的定时器（在update中调用）
+     */
+    private processTimers(): void {
+        const toExecute: number[] = [];
+        for (const [id, timer] of this.timers) {
+            if (this.totalTime >= timer.targetTime) {
+                try {
+                    timer.callback();
+                } catch (e) {
+                    logger.error(`Timer callback error: ${e}`);
+                }
+                if (timer.interval !== undefined) {
+                    timer.targetTime += timer.interval;
+                } else {
+                    toExecute.push(id);
+                }
+            }
+        }
+        toExecute.forEach(id => this.timers.delete(id));
     }
 }
 

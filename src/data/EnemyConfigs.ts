@@ -3,20 +3,19 @@
  * 定义游戏中所有敌人的属性和行为配置
  */
 
-/** 敌人类型枚举 */
-export enum EnemyType {
-    LIGHT = 'light',       // 轻型敌人
-    HEAVY = 'heavy',       // 重型敌人
-    ELITE = 'elite',       // 精英敌人
-    BOSS = 'boss'          // Boss
-}
+import { EnemyType, EnemyRarity as EnemyDataRarity } from './EnemyData';
 
-/** 敌人稀有度枚举 */
+// 重新导出以保持向后兼容
+export { EnemyType };
+
+/** 敌人稀有度（扩展版，包含EPIC/LEGENDARY） */
 export enum EnemyRarity {
-    COMMON = 'common',     // 普通
-    RARE = 'rare',         // 稀有
-    EPIC = 'epic',         // 史诗
-    LEGENDARY = 'legendary' // 传说
+    COMMON = 'COMMON',
+    ELITE = 'ELITE',
+    RARE = 'RARE',
+    EPIC = 'EPIC',
+    LEGENDARY = 'LEGENDARY',
+    BOSS = 'BOSS'
 }
 
 /** 敌人行为模式枚举 */

@@ -209,8 +209,8 @@ export class SkillUI {
      * 更新技能数据（示例）
      */
     private updateSkillData(): void {
-        // 这里可以从游戏数据中获取真实的技能数据
-        // 目前使用示例数据
+        // 技能数据已在initialize中通过createSkillSlot设置
+        // 此方法可在后续从SkillManager刷新数据时使用
     }
 
     /**
@@ -275,8 +275,15 @@ export class SkillUI {
         const slot = this.skillSlots.get(index);
         if (!slot) return;
 
-        // 更新技能数据
-        // 这里需要根据实际的UI结构来更新
+        const nameText = slot.getData('nameText') as Phaser.GameObjects.Text;
+        const levelText = slot.getData('levelText') as Phaser.GameObjects.Text;
+
+        if (nameText && nameText.active) {
+            nameText.setText(data.name);
+        }
+        if (levelText && levelText.active) {
+            levelText.setText(`Lv.${data.level}/${data.maxLevel}`);
+        }
     }
 
     /**

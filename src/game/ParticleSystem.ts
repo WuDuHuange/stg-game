@@ -7,17 +7,35 @@ import Phaser from 'phaser';
 export class ParticleSystem {
     private scene: Phaser.Scene;
     private emitters: Map<string, Phaser.GameObjects.Particles.ParticleEmitter>;
+    private textureReady: boolean = false;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
         this.emitters = new Map();
+        this.ensureParticleTexture();
+    }
+
+    /**
+     * 确保粒子纹理存在（用代码生成圆形纹理代替外部文件）
+     */
+    private ensureParticleTexture(): void {
+        if (this.scene.textures.exists('particle_dot')) {
+            this.textureReady = true;
+            return;
+        }
+        const graphics = this.scene.add.graphics();
+        graphics.fillStyle(0xffffff, 1);
+        graphics.fillCircle(4, 4, 4);
+        graphics.generateTexture('particle_dot', 8, 8);
+        graphics.destroy();
+        this.textureReady = true;
     }
 
     /**
      * 创建爆炸粒子效果
      */
     public createExplosion(x: number, y: number, color: number = 0xff0000): void {
-        const emitter = this.scene.add.particles(0, 0, 'default', {
+        const emitter = this.scene.add.particles(0, 0, 'particle_dot', {
             x: x,
             y: y,
             speed: { min: 50, max: 150 },

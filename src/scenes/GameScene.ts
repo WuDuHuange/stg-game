@@ -6,15 +6,35 @@ import Phaser from 'phaser';
 import { ParticleSystem } from '@game/ParticleSystem';
 import { ScreenEffects } from '@game/ScreenEffects';
 import { SceneManager } from '@game/SceneManager';
+import { SkillManager } from '@game/SkillManager';
+import { SynergySystem } from '@game/SynergySystem';
+import { PlayerManager } from '@game/PlayerManager';
+import { StatType } from '@data/PlayerData';
+import { SkillType } from '@data/SkillData';
+import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
 import { SkillUI } from '@ui/SkillUI';
 import { SettingsUI } from '@ui/SettingsUI';
 import { PauseUI } from '@ui/PauseUI';
 import { ResultUI } from '@ui/ResultUI';
 import { EquipmentUI } from '@ui/EquipmentUI';
+import { HUDUI } from '@ui/HUDUI';
+
+/**
+ * UI层级枚举，用于ESC键导航
+ * 层级越高优先级越高，ESC先关闭最顶层的UI
+ */
+enum UILayerLevel {
+    NONE = 0,        // 无UI打开，ESC触发暂停
+    EQUIPMENT = 1,   // 装备UI，ESC关闭装备UI
+    SKILL = 2,       // 技能UI，ESC关闭技能UI
+    SETTINGS = 3,    // 设置UI，ESC关闭设置UI
+    PAUSE = 4,       // 暂停UI，ESC恢复游戏
+    RESULT = 5       // 结算UI，ESC无操作（需点击按钮）
+}
 
 export class GameScene extends Phaser.Scene {
-    private player!: Phaser.GameObjects.Sprite;
-    private playerGlow!: Phaser.GameObjects.GameObject;
+    private player!: Phaser.GameObjects.Arc;
+    private playerGlow!: Phaser.GameObjects.Arc;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: any;
     private spaceKey!: Phaser.Input.Keyboard.Key;
@@ -22,14 +42,10 @@ export class GameScene extends Phaser.Scene {
     private eKey!: Phaser.Input.Keyboard.Key;
     private kKey!: Phaser.Input.Keyboard.Key;
     private oKey!: Phaser.Input.Keyboard.Key;
-    private instructions!: Phaser.GameObjects.Text[];
+    private qKey!: Phaser.Input.Keyboard.Key;
     private bullets!: Phaser.GameObjects.Group;
     private enemies!: Phaser.GameObjects.Group;
     private score: number = 0;
-    private scoreText!: Phaser.GameObjects.Text;
-    private healthBar!: Phaser.GameObjects.Rectangle;
-    private healthText!: Phaser.GameObjects.Text;
-    private pauseText!: Phaser.GameObjects.Text;
     private particleSystem!: ParticleSystem;
     private screenEffects!: ScreenEffects;
     private sceneManager!: SceneManager;
@@ -38,15 +54,39 @@ export class GameScene extends Phaser.Scene {
     private settingsUI!: SettingsUI;
     private pauseUI!: PauseUI;
     private resultUI!: ResultUI;
+    private hudUI!: HUDUI;
     private lastShotTime: number = 0;
-    private shotCooldown: number = 200; // 射击冷却时间（毫秒）
+    private shotCooldown: number = 200;
     private enemySpawnTimer!: Phaser.Time.TimerEvent;
     private gameOver: boolean = false;
+
+    // 关卡波次系统
+    private currentLevelIndex: number = 0;
+    private currentWaveIndex: number = 0;
+    private currentLevelConfig!: LevelConfig;
+    private waveEnemiesSpawned: number = 0;
+    private waveTimer!: Phaser.Time.TimerEvent;
+    private levelComplete: boolean = false;
     private playerInvincible: boolean = false;
     private comboCount: number = 0;
     private comboTimer!: Phaser.Time.TimerEvent;
-    private comboText!: Phaser.GameObjects.Text;
     private lastKillTime: number = 0;
+
+    // 玩家管理器（替代内联属性）
+    private playerManager!: PlayerManager;
+    private killCount: number = 0;
+    private maxCombo: number = 0;
+
+    // UI层级管理
+    private currentUILayer: UILayerLevel = UILayerLevel.NONE;
+
+    // 技能冷却
+    private skillCooldowns: number[] = [0, 0, 0]; // Q, W, E
+    private skillMaxCooldowns: number[] = [3, 5, 10]; // 秒
+    private skillLastCastTime: number[] = [-999, -999, -999];
+    private skillManager!: SkillManager;
+    private synergySystem!: SynergySystem;
+    private boundSkillIds: string[] = ['laser_shot', 'shield_activate', 'laser_barrage']; // Q/W/E绑定的技能ID
 
     constructor() {
         super({ key: 'GameScene' });
@@ -57,7 +97,6 @@ export class GameScene extends Phaser.Scene {
      */
     preload(): void {
         // 这里可以加载游戏资源
-        // 例如：this.load.image('player', 'assets/textures/player.png');
     }
 
     /**
@@ -65,6 +104,27 @@ export class GameScene extends Phaser.Scene {
      */
     create(): void {
         console.log('GameScene: 场景创建');
+
+        // 重置游戏状态
+        this.gameOver = false;
+        this.playerInvincible = false;
+        this.score = 0;
+        this.comboCount = 0;
+        this.killCount = 0;
+        this.maxCombo = 0;
+        this.currentUILayer = UILayerLevel.NONE;
+        this.skillCooldowns = [0, 0, 0];
+        this.skillLastCastTime = [-999, -999, -999];
+
+        // 初始化玩家管理器
+        this.playerManager = new PlayerManager();
+        this.playerManager.setStat(StatType.MAX_SHIELD, 50);
+        this.playerManager.restoreShield(50);
+
+        // 初始化技能管理器
+        this.skillManager = new SkillManager();
+        this.synergySystem = new SynergySystem();
+        this.syncSkillCooldowns();
 
         // 创建游戏对象组
         this.bullets = this.add.group();
@@ -79,6 +139,14 @@ export class GameScene extends Phaser.Scene {
         // 创建场景管理器
         this.sceneManager = new SceneManager(this);
         this.sceneManager.initialize();
+
+        // 创建HUD UI
+        this.hudUI = new HUDUI(this);
+        this.hudUI.initialize();
+
+        // 创建装备UI
+        this.equipmentUI = new EquipmentUI(this);
+        this.equipmentUI.initialize();
 
         // 创建技能UI
         this.skillUI = new SkillUI(this);
@@ -105,17 +173,10 @@ export class GameScene extends Phaser.Scene {
         // 设置输入
         this.setupInput();
 
-        // 创建装备UI
-        this.equipmentUI = new EquipmentUI(this);
-        this.equipmentUI.initialize();
-
-        // 创建HUD
-        this.createHUD();
-
         // 显示关卡标题
         this.sceneManager.showLevelTitle('第 1 关', 1500);
 
-        // 显示提示信息
+        // 显示操作提示
         this.showInstructions();
 
         // 开始生成敌人
@@ -123,6 +184,9 @@ export class GameScene extends Phaser.Scene {
 
         // 淡入效果
         this.sceneManager.fadeIn(800);
+
+        // 初始化HUD显示
+        this.updateHUD();
     }
 
     /**
@@ -170,7 +234,7 @@ export class GameScene extends Phaser.Scene {
             0xe94560
         );
 
-        // 添加玩家光晕效果（保存引用）
+        // 添加玩家光晕效果
         this.playerGlow = this.add.circle(
             this.cameras.main.width / 2,
             this.cameras.main.height - 100,
@@ -181,8 +245,6 @@ export class GameScene extends Phaser.Scene {
 
         // 设置玩家属性
         this.player.setData('speed', 300);
-        this.player.setData('health', 100);
-        this.player.setData('maxHealth', 100);
     }
 
     /**
@@ -197,138 +259,230 @@ export class GameScene extends Phaser.Scene {
         this.eKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
         this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K);
         this.oKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
+        this.qKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
-        // ESC键切换暂停
+        // ESC键 - 智能导航
         this.escKey.on('down', () => {
-            if (this.pauseUI.isGamePaused()) {
-                this.pauseUI.resume();
-            } else {
-                this.pauseUI.pause();
+            this.handleESC();
+        });
+
+        // E键 - 打开/关闭装备UI
+        this.eKey.on('down', () => {
+            if (this.currentUILayer > UILayerLevel.EQUIPMENT) return;
+            if (this.currentUILayer === UILayerLevel.EQUIPMENT) {
+                this.closeEquipmentUI();
+            } else if (this.currentUILayer === UILayerLevel.NONE) {
+                this.openEquipmentUI();
             }
         });
 
-        // E键打开/关闭装备UI
-        this.eKey.on('down', () => {
-            this.equipmentUI.show();
-        });
-
-        // K键打开/关闭技能UI
+        // K键 - 打开/关闭技能UI
         this.kKey.on('down', () => {
-            this.skillUI.toggle();
+            if (this.currentUILayer > UILayerLevel.SKILL) return;
+            if (this.currentUILayer === UILayerLevel.SKILL) {
+                this.closeSkillUI();
+            } else if (this.currentUILayer === UILayerLevel.NONE) {
+                this.openSkillUI();
+            }
         });
 
-        // O键打开/关闭设置UI
+        // O键 - 打开/关闭设置UI
         this.oKey.on('down', () => {
-            this.settingsUI.toggle();
+            if (this.currentUILayer > UILayerLevel.SETTINGS) return;
+            if (this.currentUILayer === UILayerLevel.SETTINGS) {
+                this.closeSettingsUI();
+            } else if (this.currentUILayer === UILayerLevel.NONE) {
+                this.openSettingsUI();
+            }
         });
+
+        // Q键 - 释放技能1
+        this.qKey.on('down', () => {
+            this.castSkill(0);
+        });
+
+        // W键也用于技能2（当没有UI打开时）
+        // E键也用于技能3（当没有UI打开时）- 但E已用于装备UI，所以用R
     }
 
     /**
-     * 创建HUD
+     * ESC键智能导航
+     * 根据当前UI层级决定ESC的行为：
+     * - 结算UI打开 → 无操作（需点击按钮）
+     * - 暂停UI打开 → 恢复游戏
+     * - 设置UI打开 → 关闭设置
+     * - 技能UI打开 → 关闭技能
+     * - 装备UI打开 → 关闭装备
+     * - 无UI打开 → 暂停游戏
      */
-    private createHUD(): void {
-        // 创建血条背景（更明显的边框）
-        const healthBarBg = this.add.rectangle(
-            110,
-            20,
-            204,
-            24,
-            0x1a1a2e,
-            0.9
-        );
-        healthBarBg.setStrokeStyle(2, 0x0f3460);
+    private handleESC(): void {
+        switch (this.currentUILayer) {
+            case UILayerLevel.RESULT:
+                // 结算界面不响应ESC，需点击按钮
+                break;
+            case UILayerLevel.PAUSE:
+                this.closePauseUI();
+                break;
+            case UILayerLevel.SETTINGS:
+                this.closeSettingsUI();
+                break;
+            case UILayerLevel.SKILL:
+                this.closeSkillUI();
+                break;
+            case UILayerLevel.EQUIPMENT:
+                this.closeEquipmentUI();
+                break;
+            case UILayerLevel.NONE:
+                this.openPauseUI();
+                break;
+        }
+    }
 
-        // 创建血条
-        this.healthBar = this.add.rectangle(
-            10,
-            20,
-            200,
-            20,
-            0xe94560
-        ).setOrigin(0, 0.5);
+    /**
+     * 打开装备UI
+     */
+    private openEquipmentUI(): void {
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+        this.currentUILayer = UILayerLevel.EQUIPMENT;
+        this.equipmentUI.show();
+    }
 
-        // 创建血条文本
-        this.healthText = this.add.text(
-            120,
-            20,
-            '100/100',
-            {
-                fontSize: '14px',
-                color: '#ffffff',
-                fontStyle: 'bold'
-            }
-        ).setOrigin(0.5);
+    /**
+     * 关闭装备UI
+     */
+    private closeEquipmentUI(): void {
+        if (this.currentUILayer !== UILayerLevel.EQUIPMENT) return;
+        this.currentUILayer = UILayerLevel.NONE;
+        this.equipmentUI.hide();
+    }
 
-        // 创建分数显示
-        this.scoreText = this.add.text(
-            this.cameras.main.width - 20,
-            20,
-            '分数: 0',
-            {
-                fontSize: '20px',
-                color: '#ffffff',
-                fontStyle: 'bold'
-            }
-        ).setOrigin(1, 0.5);
+    /**
+     * 打开技能UI
+     */
+    private openSkillUI(): void {
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+        this.currentUILayer = UILayerLevel.SKILL;
+        this.skillUI.show();
+    }
 
-        // 创建暂停提示（更明显，但不会干扰游戏）
-        this.pauseText = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height - 20,
-            'ESC 暂停 | E 装备 | K 技能 | O 设置',
-            {
-                fontSize: '14px',
-                color: '#666666',
-                fontStyle: 'italic'
-            }
-        ).setOrigin(0.5);
+    /**
+     * 关闭技能UI
+     */
+    private closeSkillUI(): void {
+        if (this.currentUILayer !== UILayerLevel.SKILL) return;
+        this.currentUILayer = UILayerLevel.NONE;
+        this.skillUI.hide();
+    }
 
-        // 5秒后淡出ESC提示
-        this.time.delayedCall(5000, () => {
-            if (this.pauseText && this.pauseText.active) {
-                this.tweens.add({
-                    targets: this.pauseText,
-                    alpha: 0,
-                    duration: 500,
-                    onComplete: () => {
-                        if (this.pauseText) {
-                            this.pauseText.destroy();
-                        }
+    /**
+     * 打开设置UI
+     */
+    private openSettingsUI(): void {
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+        this.currentUILayer = UILayerLevel.SETTINGS;
+        this.settingsUI.show();
+    }
+
+    /**
+     * 关闭设置UI
+     */
+    private closeSettingsUI(): void {
+        if (this.currentUILayer !== UILayerLevel.SETTINGS) return;
+        this.currentUILayer = UILayerLevel.NONE;
+        this.settingsUI.hide();
+    }
+
+    /**
+     * 打开暂停UI
+     */
+    private openPauseUI(): void {
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+        this.currentUILayer = UILayerLevel.PAUSE;
+        this.pauseUI.pause();
+    }
+
+    /**
+     * 关闭暂停UI（恢复游戏）
+     */
+    private closePauseUI(): void {
+        if (this.currentUILayer !== UILayerLevel.PAUSE) return;
+        this.currentUILayer = UILayerLevel.NONE;
+        this.pauseUI.resume();
+    }
+
+    /**
+     * 从暂停UI返回主菜单
+     */
+    private returnToMenuFromPause(): void {
+        this.currentUILayer = UILayerLevel.NONE;
+        this.pauseUI.returnToMenu();
+    }
+
+    /**
+     * 释放技能
+     */
+    private castSkill(index: number): void {
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+        if (this.gameOver) return;
+
+        const now = this.time.now / 1000;
+        const elapsed = now - this.skillLastCastTime[index];
+
+        if (elapsed >= this.skillMaxCooldowns[index]) {
+            this.skillLastCastTime[index] = now;
+
+            // 从SkillManager获取技能数据
+            const skillId = this.boundSkillIds[index];
+            const skill = this.skillManager.getSkill(skillId);
+
+            // 创建技能释放特效
+            this.particleSystem.createSkillCast(this.player.x, this.player.y);
+
+            // 技能效果 - 根据技能类型决定效果
+            if (index === 0) {
+                // Q技能 - 主动攻击技能
+                const damage = skill ? skill.getEffect().damage : 50;
+                const shots = Math.ceil(damage / 25); // 伤害越高子弹越多
+                for (let i = 0; i < Math.min(shots, 5); i++) {
+                    this.time.delayedCall(i * 50, () => this.shoot());
+                }
+            } else if (index === 1) {
+                // W技能 - 护盾/辅助技能
+                const shieldRestore = skill ? Math.round(skill.getEffect().damage * 0.4) : 20;
+                this.playerManager.restoreShield(shieldRestore);
+                this.updateHUD();
+            } else if (index === 2) {
+                // E技能 - 终极技能：对所有敌人造成大量伤害（走正常击杀流程）
+                this.enemies.getChildren().forEach((enemy: any) => {
+                    if (enemy.active) {
+                        const enemyHealth = enemy.getData('health') || 20;
+                        enemy.setData('health', 0);
                     }
                 });
+                this.screenEffects.shakeAndFlash(20, 0xffd700, 500);
             }
-        });
-
-        // 创建关卡进度提示
-        this.createLevelProgress();
+        }
     }
 
     /**
-     * 创建关卡进度提示
+     * 从SkillManager同步技能冷却时间
      */
-    private createLevelProgress(): void {
-        // 关卡信息（左下角）
-        const levelText = this.add.text(
-            10,
-            this.cameras.main.height - 50,
-            '第 1 关 - 初次接触',
-            {
-                fontSize: '14px',
-                color: '#aaaaaa'
+    private syncSkillCooldowns(): void {
+        for (let i = 0; i < this.boundSkillIds.length; i++) {
+            const skill = this.skillManager.getSkill(this.boundSkillIds[i]);
+            if (skill) {
+                this.skillMaxCooldowns[i] = skill.getEffect().cooldown;
             }
-        );
+        }
+    }
 
-        // 连击显示（当连击数>0时显示）
-        this.comboText = this.add.text(
-            10,
-            this.cameras.main.height - 30,
-            '',
-            {
-                fontSize: '16px',
-                color: '#ffff00',
-                fontStyle: 'bold'
-            }
-        );
+    /**
+     * 绑定技能到快捷键槽位
+     */
+    public bindSkillToSlot(skillId: string, slotIndex: number): void {
+        if (slotIndex < 0 || slotIndex >= 3) return;
+        this.boundSkillIds[slotIndex] = skillId;
+        this.syncSkillCooldowns();
     }
 
     /**
@@ -336,38 +490,56 @@ export class GameScene extends Phaser.Scene {
      */
     private showInstructions(): void {
         const instructions = [
-            '使用 WASD 或 方向键 移动',
-            '按 SPACE 发射子弹',
-            '按 ESC 返回主菜单'
+            'WASD/方向键 移动 | SPACE 射击',
+            'Q/W/E 技能 | ESC 暂停'
         ];
 
-        this.instructions = [];
+        const instructionTexts: Phaser.GameObjects.Text[] = [];
 
         instructions.forEach((text, index) => {
             const instructionText = this.add.text(
                 this.cameras.main.width / 2,
-                this.cameras.main.height / 2 - 50 + index * 30,
+                this.cameras.main.height / 2 - 30 + index * 30,
                 text,
                 {
-                    fontSize: '20px',
+                    fontSize: '18px',
                     color: '#ffffff',
                     fontStyle: 'bold'
                 }
             ).setOrigin(0.5);
-            this.instructions.push(instructionText);
+            instructionTexts.push(instructionText);
         });
 
         // 3秒后隐藏提示
         this.time.delayedCall(3000, () => {
-            this.instructions.forEach(text => {
-                this.tweens.add({
-                    targets: text,
-                    alpha: 0,
-                    duration: 500,
-                    onComplete: () => text.destroy()
-                });
+            instructionTexts.forEach(text => {
+                if (text && text.active) {
+                    this.tweens.add({
+                        targets: text,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => text.destroy()
+                    });
+                }
             });
         });
+    }
+
+    /**
+     * 更新HUD显示
+     */
+    private updateHUD(): void {
+        const stats = this.playerManager.getStats();
+        const levelData = this.playerManager.getLevelData();
+        this.hudUI.updateHealth(stats.health, stats.maxHealth);
+        this.hudUI.updateShield(stats.shield, stats.maxShield);
+        this.hudUI.updateScore(this.score);
+        this.hudUI.updateLevel(levelData.level, levelData.experience, levelData.experienceToNextLevel);
+        this.hudUI.updateCombo(this.comboCount);
+
+        // 更新协同效果显示
+        const activeSynergies = this.synergySystem.getActiveSynergies();
+        this.hudUI.updateSynergies(activeSynergies.map(s => s.synergyId));
     }
 
     /**
@@ -379,15 +551,14 @@ export class GameScene extends Phaser.Scene {
 
         if (!this.player || !this.player.active) return;
 
+        // 更新技能冷却显示
+        this.updateSkillCooldowns();
+
+        // 如果有UI打开（非NONE），不处理游戏输入
+        if (this.currentUILayer !== UILayerLevel.NONE) return;
+
         // 更新连击显示
-        if (this.comboText && this.comboText.active) {
-            if (this.comboCount >= 2) {
-                this.comboText.setText(`${this.comboCount} COMBO`);
-                this.comboText.setAlpha(1);
-            } else {
-                this.comboText.setAlpha(0);
-            }
-        }
+        this.hudUI.updateCombo(this.comboCount);
 
         const speed = this.player.getData('speed');
         let velocityX = 0;
@@ -451,6 +622,25 @@ export class GameScene extends Phaser.Scene {
 
         // 检查碰撞
         this.checkCollisions();
+
+        // 护盾缓慢恢复
+        const stats = this.playerManager.getStats();
+        if (stats.shield < stats.maxShield) {
+            this.playerManager.restoreShield(0.02);
+            this.hudUI.updateShield(this.playerManager.getStats().shield, stats.maxShield);
+        }
+    }
+
+    /**
+     * 更新技能冷却显示
+     */
+    private updateSkillCooldowns(): void {
+        const now = this.time.now / 1000;
+        for (let i = 0; i < 3; i++) {
+            const elapsed = now - this.skillLastCastTime[i];
+            const percent = Math.min(1, elapsed / this.skillMaxCooldowns[i]);
+            this.hudUI.updateSkillCooldown(i, percent);
+        }
     }
 
     /**
@@ -489,35 +679,168 @@ export class GameScene extends Phaser.Scene {
     }
 
     /**
-     * 开始生成敌人
+     * 开始关卡波次系统
      */
     private startEnemySpawning(): void {
-        this.enemySpawnTimer = this.time.addEvent({
-            delay: 2000, // 每2秒生成一个敌人
-            callback: this.spawnEnemy,
+        this.currentLevelIndex = 0;
+        this.currentWaveIndex = 0;
+        this.levelComplete = false;
+        this.startLevel(this.currentLevelIndex);
+    }
+
+    /**
+     * 开始指定关卡
+     */
+    private startLevel(levelIndex: number): void {
+        const config = getLevelConfig(`level_${levelIndex + 1}`);
+        if (!config) {
+            // 所有关卡完成
+            this.levelComplete = true;
+            return;
+        }
+
+        this.currentLevelConfig = config;
+        this.currentWaveIndex = 0;
+        this.waveEnemiesSpawned = 0;
+
+        // 更新HUD关卡进度
+        if (this.hudUI) {
+            this.hudUI.setLevelProgress(levelIndex);
+            this.hudUI.updateLevelInfo(levelIndex + 1, config.name);
+        }
+
+        // 显示关卡开始提示
+        this.showLevelStartMessage(config.name);
+
+        // 开始第一波
+        this.startWave();
+    }
+
+    /**
+     * 开始当前波次
+     */
+    private startWave(): void {
+        if (!this.currentLevelConfig || this.currentWaveIndex >= this.currentLevelConfig.waves.length) {
+            // 所有波次完成，进入下一关
+            this.currentLevelIndex++;
+            this.time.delayedCall(2000, () => this.startLevel(this.currentLevelIndex));
+            return;
+        }
+
+        const wave = this.currentLevelConfig.waves[this.currentWaveIndex];
+        this.waveEnemiesSpawned = 0;
+
+        // 按波次间隔生成敌人
+        this.waveTimer = this.time.addEvent({
+            delay: wave.spawnInterval,
+            callback: this.spawnWaveEnemy,
             callbackScope: this,
             loop: true
         });
     }
 
     /**
-     * 生成敌人
+     * 生成波次敌人
      */
-    private spawnEnemy(): void {
+    private spawnWaveEnemy(): void {
+        if (!this.currentLevelConfig || this.currentWaveIndex >= this.currentLevelConfig.waves.length) return;
+
+        const wave = this.currentLevelConfig.waves[this.currentWaveIndex];
+
+        // 计算波次总敌人数
+        const totalEnemies = wave.enemies.reduce((sum, e) => sum + e.count, 0);
+
+        if (this.waveEnemiesSpawned >= totalEnemies) {
+            // 当前波次完成
+            if (this.waveTimer) this.waveTimer.destroy();
+            this.currentWaveIndex++;
+
+            // 等待后开始下一波
+            this.time.delayedCall(wave.spawnInterval * 2, () => {
+                if (!this.gameOver) this.startWave();
+            });
+            return;
+        }
+
+        // 根据已生成数量确定当前敌人类型
+        let remaining = this.waveEnemiesSpawned;
+        let enemyId = wave.enemies[0]?.id || 'light_scout';
+        let isBoss = false;
+
+        for (const entry of wave.enemies) {
+            if (remaining < entry.count) {
+                enemyId = entry.id;
+                isBoss = entry.id.startsWith('boss');
+                break;
+            }
+            remaining -= entry.count;
+        }
+
+        // 生成敌人 - 优先从EnemyConfig获取数据，否则用默认值
         const x = Phaser.Math.Between(30, this.cameras.main.width - 30);
         const y = -30;
 
-        // 直接生成敌人（不显示警告区域）
-        const enemy = this.add.circle(x, y, 15, 0xff0000);
-        enemy.setData('speed', Phaser.Math.Between(50, 150));
-        enemy.setData('health', 20);
-        enemy.setData('maxHealth', 20);
-        enemy.setData('score', 100);
+        const config = getEnemyConfig(enemyId);
+        const enemyRadius = config ? config.radius : (isBoss ? 30 : 15);
+        const enemyColor = config ? config.color : (isBoss ? 0xff4400 : 0xff0000);
+        const enemyHealth = config ? config.health : (isBoss ? 200 : 20);
+        const enemyDamage = config ? config.damage : 10;
+        const enemySpeed = config ? config.speed : Phaser.Math.Between(50, 150);
+        const enemyScore = config ? config.score : (isBoss ? 500 : 100);
+        const enemyExp = config ? config.experience : 10;
 
-        // 添加敌人光晕
-        const glow = this.add.circle(x, y, 25, 0xff0000, 0.3);
+        const enemy = this.add.circle(x, y, enemyRadius, enemyColor);
+        enemy.setData('speed', enemySpeed);
+        enemy.setData('health', enemyHealth);
+        enemy.setData('maxHealth', enemyHealth);
+        enemy.setData('damage', enemyDamage);
+        enemy.setData('score', enemyScore);
+        enemy.setData('experience', enemyExp);
+        enemy.setData('isBoss', isBoss);
+        enemy.setData('enemyId', enemyId);
+
+        // 添加敌人光晕 - 关联到enemy以便销毁时清理
+        const glow = this.add.circle(x, y, enemyRadius + 10, enemyColor, 0.3);
+        enemy.setData('glow', glow);
 
         this.enemies.add(enemy);
+        this.waveEnemiesSpawned++;
+    }
+
+    /**
+     * 显示关卡开始消息
+     */
+    private showLevelStartMessage(levelName: string): void {
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        const title = this.add.text(centerX, centerY - 20, `第 ${this.currentLevelIndex + 1} 关`, {
+            fontSize: '28px',
+            color: '#e94560',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const subtitle = this.add.text(centerX, centerY + 15, levelName, {
+            fontSize: '18px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: [title, subtitle],
+            alpha: 0,
+            y: '-=30',
+            duration: 2000,
+            delay: 1000,
+            ease: 'Power2.easeOut',
+            onComplete: () => {
+                title.destroy();
+                subtitle.destroy();
+            }
+        });
     }
 
     /**
@@ -525,17 +848,60 @@ export class GameScene extends Phaser.Scene {
      */
     private updateEnemies(): void {
         this.enemies.getChildren().forEach((enemy: any) => {
-            const speed = enemy.getData('speed');
-            enemy.y += speed * this.game.loop.delta / 1000;
+            if (!enemy.active) return;
 
-            // 简单的左右摆动
-            enemy.x += Math.sin(Date.now() / 500) * 0.5;
+            const speed = enemy.getData('speed');
+            const enemyId = enemy.getData('enemyId') || '';
+            const isBoss = enemy.getData('isBoss') || false;
+            const time = Date.now() / 1000;
+
+            // 根据敌人ID决定移动模式
+            if (isBoss) {
+                // Boss: 缓慢下移到屏幕1/4处后水平巡逻
+                if (enemy.y < this.cameras.main.height * 0.25) {
+                    enemy.y += speed * this.game.loop.delta / 1000;
+                } else {
+                    enemy.x += Math.sin(time * 0.8) * speed * 0.5 * this.game.loop.delta / 1000;
+                }
+            } else if (enemyId.startsWith('heavy')) {
+                // 重型: 直线下移，偶尔微调
+                enemy.y += speed * this.game.loop.delta / 1000;
+                enemy.x += Math.sin(time * 1.5 + enemy.x) * 0.3;
+            } else if (enemyId.startsWith('elite')) {
+                // 精英: Z字形移动
+                enemy.y += speed * this.game.loop.delta / 1000;
+                enemy.x += Math.sin(time * 2 + enemy.y * 0.02) * speed * 0.3 * this.game.loop.delta / 1000;
+            } else {
+                // 轻型: 简单下移+摆动
+                enemy.y += speed * this.game.loop.delta / 1000;
+                enemy.x += Math.sin(time * 3 + enemy.x * 0.1) * 0.5;
+            }
+
+            // 同步光晕位置
+            const glow = enemy.getData('glow');
+            if (glow && glow.active) {
+                glow.x = enemy.x;
+                glow.y = enemy.y;
+            }
 
             // 移除超出屏幕的敌人
-            if (enemy.y > this.cameras.main.height + 30) {
-                enemy.destroy();
+            if (enemy.y > this.cameras.main.height + 60) {
+                this.destroyEnemy(enemy);
             }
         });
+    }
+
+    /**
+     * 销毁敌人及其关联的光晕
+     */
+    private destroyEnemy(enemy: any): void {
+        const glow = enemy.getData('glow');
+        if (glow && glow.active) {
+            glow.destroy();
+        }
+        if (enemy.active) {
+            enemy.destroy();
+        }
     }
 
     /**
@@ -560,12 +926,10 @@ export class GameScene extends Phaser.Scene {
                 );
 
                 if (distance < 20) {
-                    // 标记子弹要销毁
                     if (!bulletsToDestroy.includes(bullet)) {
                         bulletsToDestroy.push(bullet);
                     }
 
-                    // 计算伤害
                     const damage = bullet.getData('damage');
                     const currentDamage = enemiesToDamage.get(enemy) || 0;
                     enemiesToDamage.set(enemy, currentDamage + damage);
@@ -583,12 +947,16 @@ export class GameScene extends Phaser.Scene {
             if (newHealth <= 0) {
                 // 敌人死亡
                 const score = enemy.getData('score');
+                const experience = enemy.getData('experience') || 10;
                 this.score += score;
-                this.scoreText.setText(`分数: ${this.score}`);
+                this.killCount++;
 
                 // 连击系统
                 this.comboCount++;
                 this.lastKillTime = Date.now();
+                if (this.comboCount > this.maxCombo) {
+                    this.maxCombo = this.comboCount;
+                }
 
                 // 重置连击计时器
                 if (this.comboTimer) {
@@ -598,7 +966,7 @@ export class GameScene extends Phaser.Scene {
                     this.comboCount = 0;
                 });
 
-                // 显示连击特效（连击数大于2时）
+                // 显示连击特效
                 if (this.comboCount >= 2) {
                     this.particleSystem.createComboEffect(enemy.x, enemy.y, this.comboCount);
                 }
@@ -609,12 +977,16 @@ export class GameScene extends Phaser.Scene {
                 // 添加轻微屏幕震动
                 this.screenEffects.shake(5, 200);
 
-                enemy.destroy();
+                // 销毁敌人及光晕
+                this.destroyEnemy(enemy);
+
+                // 获取经验值
+                this.gainExperience(experience);
             } else {
                 // 敌人受伤
                 enemy.setData('health', newHealth);
 
-                // 闪烁效果（保存原始颜色）
+                // 闪烁效果
                 const originalColor = enemy.fillColor;
                 enemy.setFillStyle(0xffffff);
 
@@ -636,7 +1008,6 @@ export class GameScene extends Phaser.Scene {
         // 敌人与玩家的碰撞
         const enemiesToDestroy: any[] = [];
         this.enemies.getChildren().forEach((enemy: any) => {
-            // 检查敌人是否仍然有效
             if (!enemy.active) return;
 
             const distance = Phaser.Math.Distance.Between(
@@ -645,17 +1016,38 @@ export class GameScene extends Phaser.Scene {
             );
 
             if (distance < 35) {
-                this.playerTakeDamage(10);
+                const enemyDamage = enemy.getData('damage') || 10;
+                this.playerTakeDamage(enemyDamage);
                 enemiesToDestroy.push(enemy);
             }
         });
 
-        // 统一销毁敌人，避免在遍历过程中修改数组
         enemiesToDestroy.forEach(enemy => {
-            if (enemy.active) {
-                enemy.destroy();
-            }
+            this.destroyEnemy(enemy);
         });
+    }
+
+    /**
+     * 获取经验值
+     */
+    private gainExperience(amount: number): void {
+        const oldLevel = this.playerManager.getLevel();
+        const leveledUp = this.playerManager.addExperience(amount);
+
+        // 检查升级
+        if (leveledUp) {
+            // 升级属性提升
+            this.playerManager.addStat(StatType.MAX_HEALTH, 10);
+            this.playerManager.heal(this.playerManager.getStats().maxHealth); // 满血
+            this.playerManager.addStat(StatType.MAX_SHIELD, 5);
+            this.playerManager.restoreShield(this.playerManager.getStats().maxShield); // 满盾
+
+            // 升级特效
+            this.particleSystem.createLevelUp(this.player.x, this.player.y);
+            this.screenEffects.shakeAndFlash(10, 0x00ff88, 300);
+        }
+
+        this.updateHUD();
     }
 
     /**
@@ -664,12 +1056,11 @@ export class GameScene extends Phaser.Scene {
     private playerTakeDamage(damage: number): void {
         if (this.playerInvincible || this.gameOver) return;
 
-        const health = this.player.getData('health');
-        const newHealth = Math.max(0, health - damage);
-        this.player.setData('health', newHealth);
+        // 委托给PlayerManager处理（先扣护盾再扣血量，考虑防御）
+        this.playerManager.takeDamage(damage);
 
-        // 更新血条
-        this.updateHealthBar();
+        // 更新HUD
+        this.updateHUD();
 
         // 创建屏幕震动+闪光效果
         this.screenEffects.shakeAndFlash(15, 0xff0000, 300);
@@ -677,7 +1068,7 @@ export class GameScene extends Phaser.Scene {
         // 创建玩家受伤粒子效果
         this.particleSystem.createPlayerHit(this.player.x, this.player.y);
 
-        // 闪烁效果（保存原始颜色）
+        // 闪烁效果
         const originalColor = this.player.fillColor;
         this.player.setFillStyle(0xff0000);
         this.playerInvincible = true;
@@ -694,30 +1085,9 @@ export class GameScene extends Phaser.Scene {
         });
 
         // 检查游戏结束
-        if (newHealth <= 0) {
+        if (!this.playerManager.isAlive()) {
             this.gameOver = true;
             this.handleGameOver();
-        }
-    }
-
-    /**
-     * 更新血条
-     */
-    private updateHealthBar(): void {
-        const health = this.player.getData('health');
-        const maxHealth = this.player.getData('maxHealth');
-        const healthPercent = health / maxHealth;
-
-        this.healthBar.width = 200 * healthPercent;
-        this.healthText.setText(`${health}/${maxHealth}`);
-
-        // 血量低时改变颜色
-        if (healthPercent < 0.3) {
-            this.healthBar.fillColor = 0xff0000;
-        } else if (healthPercent < 0.6) {
-            this.healthBar.fillColor = 0xffaa00;
-        } else {
-            this.healthBar.fillColor = 0xe94560;
         }
     }
 
@@ -732,18 +1102,24 @@ export class GameScene extends Phaser.Scene {
             this.enemySpawnTimer.destroy();
             this.enemySpawnTimer = null!;
         }
+        if (this.waveTimer) {
+            this.waveTimer.destroy();
+        }
 
         // 停止连击计时器
         if (this.comboTimer) {
             this.comboTimer.destroy();
         }
 
+        // 设置结算UI层级
+        this.currentUILayer = UILayerLevel.RESULT;
+
         // 显示结算界面
         this.resultUI.showResult({
             isVictory: false,
             score: this.score,
-            enemiesKilled: Math.floor(this.score / 100),
-            maxCombo: this.comboCount,
+            enemiesKilled: this.killCount,
+            maxCombo: this.maxCombo,
             timeElapsed: this.time.now / 1000,
             level: 1
         });
@@ -761,6 +1137,11 @@ export class GameScene extends Phaser.Scene {
      */
     destroy(): void {
         console.log('GameScene: 场景销毁');
+
+        // 清理HUD UI
+        if (this.hudUI) {
+            this.hudUI.destroy();
+        }
 
         // 清理装备UI
         if (this.equipmentUI) {
@@ -795,6 +1176,9 @@ export class GameScene extends Phaser.Scene {
         // 停止所有定时器
         if (this.enemySpawnTimer) {
             this.enemySpawnTimer.destroy();
+        }
+        if (this.waveTimer) {
+            this.waveTimer.destroy();
         }
 
         // 停止所有动画
