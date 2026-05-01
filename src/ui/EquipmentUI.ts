@@ -259,6 +259,36 @@ export class EquipmentUI {
     }
 
     /**
+     * 从WeaponManager同步装备数据
+     */
+    public syncFromWeaponManager(weaponManager: any): void {
+        const slotMapping: Record<string, string> = {
+            '头部': 'HEAD',
+            '左手': 'LEFT_HAND',
+            '右手': 'RIGHT_HAND',
+            '躯干': 'TORSO',
+            '腿部': 'LEGS'
+        };
+
+        for (const [slotName, slotType] of Object.entries(slotMapping)) {
+            const weapon = weaponManager.getEquippedWeapon(slotType);
+            if (weapon) {
+                const data = weapon.getData ? weapon.getData() : weapon;
+                const baseStats = data.baseStats || {};
+                this.equipmentData.set(slotName, {
+                    name: data.name || '未知武装',
+                    attack: baseStats.damage || 0,
+                    defense: baseStats.defense || 0,
+                    agility: baseStats.attackSpeed ? Math.round(baseStats.attackSpeed * 10) : 0,
+                    level: 0,
+                    maxLevel: 5,
+                    rarity: data.rarity || 'COMMON'
+                });
+            }
+        }
+    }
+
+    /**
      * 获取装备数据
      */
     private getEquipmentData(slotName: string): any {

@@ -8,7 +8,12 @@ import { ScreenEffects } from '@game/ScreenEffects';
 import { SceneManager } from '@game/SceneManager';
 import { SkillManager } from '@game/SkillManager';
 import { SynergySystem } from '@game/SynergySystem';
+import { EnemyAI } from '@game/EnemyAI';
+import { audioManager } from '@systems/AudioManager';
 import { PlayerManager } from '@game/PlayerManager';
+import { WeaponManager } from '@game/WeaponManager';
+import { WeaponLoader } from '@data/WeaponLoader';
+import { SlotType } from '@data/WeaponData';
 import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
@@ -43,7 +48,10 @@ export class GameScene extends Phaser.Scene {
     private kKey!: Phaser.Input.Keyboard.Key;
     private oKey!: Phaser.Input.Keyboard.Key;
     private qKey!: Phaser.Input.Keyboard.Key;
+    private rKey!: Phaser.Input.Keyboard.Key;
+    private fKey!: Phaser.Input.Keyboard.Key;
     private bullets!: Phaser.GameObjects.Group;
+    private enemyBullets!: Phaser.GameObjects.Group;
     private enemies!: Phaser.GameObjects.Group;
     private score: number = 0;
     private particleSystem!: ParticleSystem;
@@ -67,10 +75,12 @@ export class GameScene extends Phaser.Scene {
     private waveEnemiesSpawned: number = 0;
     private waveTimer!: Phaser.Time.TimerEvent;
     private levelComplete: boolean = false;
+    private enemyFireTimer!: Phaser.Time.TimerEvent;
     private playerInvincible: boolean = false;
     private comboCount: number = 0;
     private comboTimer!: Phaser.Time.TimerEvent;
     private lastKillTime: number = 0;
+    private trailFrameCounter: number = 0;
 
     // 玩家管理器（替代内联属性）
     private playerManager!: PlayerManager;
@@ -86,7 +96,9 @@ export class GameScene extends Phaser.Scene {
     private skillLastCastTime: number[] = [-999, -999, -999];
     private skillManager!: SkillManager;
     private synergySystem!: SynergySystem;
-    private boundSkillIds: string[] = ['laser_shot', 'shield_activate', 'laser_barrage']; // Q/W/E绑定的技能ID
+    private weaponManager!: WeaponManager;
+    private boundSkillIds: string[] = ['laser_shot', 'shield_activate', 'laser_barrage']; // Q/R/F绑定的技能ID
+    private enemyAIs: Map<any, EnemyAI> = new Map();
 
     constructor() {
         super({ key: 'GameScene' });
@@ -113,6 +125,7 @@ export class GameScene extends Phaser.Scene {
         this.killCount = 0;
         this.maxCombo = 0;
         this.currentUILayer = UILayerLevel.NONE;
+        this.enemyAIs.clear();
         this.skillCooldowns = [0, 0, 0];
         this.skillLastCastTime = [-999, -999, -999];
 
@@ -124,14 +137,19 @@ export class GameScene extends Phaser.Scene {
         // 初始化技能管理器
         this.skillManager = new SkillManager();
         this.synergySystem = new SynergySystem();
+        this.weaponManager = new WeaponManager();
+        this.equipStartingWeapons();
         this.syncSkillCooldowns();
 
         // 创建游戏对象组
         this.bullets = this.add.group();
+        this.enemyBullets = this.add.group();
         this.enemies = this.add.group();
 
         // 创建粒子系统
         this.particleSystem = new ParticleSystem(this);
+
+        audioManager.initialize(this);
 
         // 创建屏幕特效系统
         this.screenEffects = new ScreenEffects(this);
@@ -260,6 +278,8 @@ export class GameScene extends Phaser.Scene {
         this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K);
         this.oKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
         this.qKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+        this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        this.fKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F);
 
         // ESC键 - 智能导航
         this.escKey.on('down', () => {
@@ -296,13 +316,20 @@ export class GameScene extends Phaser.Scene {
             }
         });
 
-        // Q键 - 释放技能1
+        // Q键 - 释放技能1（无冲突）
         this.qKey.on('down', () => {
             this.castSkill(0);
         });
 
-        // W键也用于技能2（当没有UI打开时）
-        // E键也用于技能3（当没有UI打开时）- 但E已用于装备UI，所以用R
+        // R键 - 释放技能2（不与WASD移动冲突）
+        this.rKey.on('down', () => {
+            this.castSkill(1);
+        });
+
+        // F键 - 释放技能3（不与任何功能冲突）
+        this.fKey.on('down', () => {
+            this.castSkill(2);
+        });
     }
 
     /**
@@ -344,6 +371,7 @@ export class GameScene extends Phaser.Scene {
     private openEquipmentUI(): void {
         if (this.currentUILayer !== UILayerLevel.NONE) return;
         this.currentUILayer = UILayerLevel.EQUIPMENT;
+        this.equipmentUI.syncFromWeaponManager(this.weaponManager);
         this.equipmentUI.show();
     }
 
@@ -437,6 +465,7 @@ export class GameScene extends Phaser.Scene {
 
             // 创建技能释放特效
             this.particleSystem.createSkillCast(this.player.x, this.player.y);
+            audioManager.playProceduralSFX('skill');
 
             // 技能效果 - 根据技能类型决定效果
             if (index === 0) {
@@ -486,12 +515,34 @@ export class GameScene extends Phaser.Scene {
     }
 
     /**
+     * 装备初始武器（从WeaponLoader获取）
+     */
+    private equipStartingWeapons(): void {
+        const weapons = WeaponLoader.createExampleWeapons();
+        const slotTypes = [SlotType.LEFT_HAND, SlotType.RIGHT_HAND, SlotType.HEAD, SlotType.TORSO, SlotType.LEGS];
+
+        for (let i = 0; i < Math.min(weapons.length, slotTypes.length); i++) {
+            this.weaponManager.equipWeapon(slotTypes[i], weapons[i]);
+        }
+
+        // 更新协同效果
+        this.synergySystem.checkSynergies(this.weaponManager.getAllEquippedWeapons());
+    }
+
+    /**
+     * 获取WeaponManager（供EquipmentUI使用）
+     */
+    public getWeaponManager(): WeaponManager {
+        return this.weaponManager;
+    }
+
+    /**
      * 显示操作提示
      */
     private showInstructions(): void {
         const instructions = [
             'WASD/方向键 移动 | SPACE 射击',
-            'Q/W/E 技能 | ESC 暂停'
+            'Q/R/F 技能 | ESC 暂停'
         ];
 
         const instructionTexts: Phaser.GameObjects.Text[] = [];
@@ -623,6 +674,10 @@ export class GameScene extends Phaser.Scene {
         // 检查碰撞
         this.checkCollisions();
 
+        // 更新敌人子弹并检测碰撞
+        this.updateEnemyBullets();
+        this.checkEnemyBulletCollisions();
+
         // 护盾缓慢恢复
         const stats = this.playerManager.getStats();
         if (stats.shield < stats.maxShield) {
@@ -659,8 +714,8 @@ export class GameScene extends Phaser.Scene {
 
         this.bullets.add(bullet);
 
-        // 创建发射特效
         this.particleSystem.createBulletMuzzle(this.player.x, this.player.y - 20);
+        audioManager.playProceduralSFX('shoot');
     }
 
     /**
@@ -686,6 +741,160 @@ export class GameScene extends Phaser.Scene {
         this.currentWaveIndex = 0;
         this.levelComplete = false;
         this.startLevel(this.currentLevelIndex);
+
+        // 启动敌人射击定时器（每500ms检查一次哪些敌人需要射击）
+        this.enemyFireTimer = this.time.addEvent({
+            delay: 500,
+            callback: this.processEnemyFire,
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    /**
+     * 处理敌人射击 - 根据敌人类型发射不同弹幕
+     */
+    private processEnemyFire(): void {
+        if (this.gameOver || this.currentUILayer !== UILayerLevel.NONE) return;
+
+        this.enemies.getChildren().forEach((enemy: any) => {
+            if (!enemy.active) return;
+
+            const isBoss = enemy.getData('isBoss') || false;
+            const enemyId = enemy.getData('enemyId') || '';
+            const now = this.time.now;
+
+            // 检查射击间隔
+            const lastFire = enemy.getData('lastFireTime') || 0;
+            const fireRate = isBoss ? 1500 : 3000; // Boss射速快
+            if (now - lastFire < fireRate) return;
+
+            enemy.setData('lastFireTime', now);
+
+            // 根据敌人ID决定弹幕模式
+            if (isBoss) {
+                this.fireBossBullets(enemy);
+            } else if (enemyId.startsWith('heavy')) {
+                this.fireSpreadBullets(enemy, 3, 150);
+            } else if (enemyId.startsWith('elite')) {
+                this.fireSpreadBullets(enemy, 5, 120);
+            } else {
+                this.fireSingleBullet(enemy, 180);
+            }
+        });
+    }
+
+    /**
+     * 敌人发射单发子弹
+     */
+    private fireSingleBullet(enemy: any, speed: number): void {
+        const bullet = this.add.circle(enemy.x, enemy.y + 10, 4, 0xff6600);
+        const glow = this.add.circle(enemy.x, enemy.y + 10, 8, 0xff6600, 0.3);
+        bullet.setData('velocityX', Math.cos(Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y)) * speed);
+        bullet.setData('velocityY', Math.sin(Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y)) * speed);
+        bullet.setData('damage', 8);
+        bullet.setData('glow', glow);
+        this.enemyBullets.add(bullet);
+    }
+
+    /**
+     * 敌人发射扇形弹幕
+     */
+    private fireSpreadBullets(enemy: any, count: number, speed: number): void {
+        const baseAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+        const spreadAngle = Math.PI / 6;
+
+        for (let i = 0; i < count; i++) {
+            const angle = baseAngle + (i - (count - 1) / 2) * (spreadAngle / count * 2);
+            const bullet = this.add.circle(enemy.x, enemy.y + 10, 3, 0xff8800);
+            const glow = this.add.circle(enemy.x, enemy.y + 10, 7, 0xff8800, 0.3);
+            bullet.setData('velocityX', Math.cos(angle) * speed);
+            bullet.setData('velocityY', Math.sin(angle) * speed);
+            bullet.setData('damage', 10);
+            bullet.setData('glow', glow);
+            this.enemyBullets.add(bullet);
+        }
+    }
+
+    /**
+     * Boss发射弹幕（圆形+螺旋混合）
+     */
+    private fireBossBullets(enemy: any): void {
+        const bulletCount = 8;
+        const speed = 140;
+        const healthPercent = (enemy.getData('health') || 1) / (enemy.getData('maxHealth') || 1);
+
+        const actualCount = healthPercent < 0.3 ? bulletCount * 2 : bulletCount;
+        const time = this.time.now / 1000;
+
+        for (let i = 0; i < actualCount; i++) {
+            const angle = (i / actualCount) * Math.PI * 2 + time * 2;
+            const bullet = this.add.circle(enemy.x, enemy.y, 5, 0xff4400);
+            const glow = this.add.circle(enemy.x, enemy.y, 10, 0xff4400, 0.3);
+            bullet.setData('velocityX', Math.cos(angle) * speed);
+            bullet.setData('velocityY', Math.sin(angle) * speed);
+            bullet.setData('damage', 15);
+            bullet.setData('glow', glow);
+            this.enemyBullets.add(bullet);
+        }
+    }
+
+    /**
+     * 更新敌人子弹
+     */
+    private updateEnemyBullets(): void {
+        this.trailFrameCounter++;
+        const shouldTrail = this.trailFrameCounter % 3 === 0;
+
+        this.enemyBullets.getChildren().forEach((bullet: any) => {
+            const vx = bullet.getData('velocityX') || 0;
+            const vy = bullet.getData('velocityY') || 100;
+            bullet.x += vx * this.game.loop.delta / 1000;
+            bullet.y += vy * this.game.loop.delta / 1000;
+
+            const glow = bullet.getData('glow');
+            if (glow && glow.active) {
+                glow.x = bullet.x;
+                glow.y = bullet.y;
+            }
+
+            if (shouldTrail && bullet.active) {
+                const color = bullet.fillColor || 0xff6600;
+                this.particleSystem.createEnemyBulletTrail(bullet.x, bullet.y, color);
+            }
+
+            if (bullet.y > this.cameras.main.height + 20 ||
+                bullet.y < -20 ||
+                bullet.x < -20 ||
+                bullet.x > this.cameras.main.width + 20) {
+                if (glow && glow.active) glow.destroy();
+                bullet.destroy();
+            }
+        });
+    }
+
+    /**
+     * 检查敌人子弹与玩家的碰撞
+     */
+    private checkEnemyBulletCollisions(): void {
+        if (this.gameOver || this.playerInvincible) return;
+
+        this.enemyBullets.getChildren().forEach((bullet: any) => {
+            if (!bullet.active) return;
+
+            const distance = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                bullet.x, bullet.y
+            );
+
+            if (distance < 20) {
+                const damage = bullet.getData('damage') || 8;
+                const glow = bullet.getData('glow');
+                if (glow && glow.active) glow.destroy();
+                this.playerTakeDamage(damage);
+                bullet.destroy();
+            }
+        });
     }
 
     /**
@@ -805,6 +1014,15 @@ export class GameScene extends Phaser.Scene {
 
         this.enemies.add(enemy);
         this.waveEnemiesSpawned++;
+
+        const aiConfig = isBoss
+            ? { chaseRange: 500, attackRange: 300, retreatHealthPercent: 0.1, chaseSpeed: 80 }
+            : enemyId.startsWith('heavy')
+                ? { chaseRange: 350, attackRange: 200, chaseSpeed: 60 }
+                : enemyId.startsWith('elite')
+                    ? { chaseRange: 400, attackRange: 250, chaseSpeed: 100 }
+                    : { chaseRange: 300, attackRange: 150, chaseSpeed: 90 };
+        this.enemyAIs.set(enemy, new EnemyAI(enemy, aiConfig));
     }
 
     /**
@@ -847,45 +1065,24 @@ export class GameScene extends Phaser.Scene {
      * 更新敌人
      */
     private updateEnemies(): void {
+        const sw = this.cameras.main.width;
+        const sh = this.cameras.main.height;
+
         this.enemies.getChildren().forEach((enemy: any) => {
             if (!enemy.active) return;
 
-            const speed = enemy.getData('speed');
-            const enemyId = enemy.getData('enemyId') || '';
-            const isBoss = enemy.getData('isBoss') || false;
-            const time = Date.now() / 1000;
-
-            // 根据敌人ID决定移动模式
-            if (isBoss) {
-                // Boss: 缓慢下移到屏幕1/4处后水平巡逻
-                if (enemy.y < this.cameras.main.height * 0.25) {
-                    enemy.y += speed * this.game.loop.delta / 1000;
-                } else {
-                    enemy.x += Math.sin(time * 0.8) * speed * 0.5 * this.game.loop.delta / 1000;
-                }
-            } else if (enemyId.startsWith('heavy')) {
-                // 重型: 直线下移，偶尔微调
-                enemy.y += speed * this.game.loop.delta / 1000;
-                enemy.x += Math.sin(time * 1.5 + enemy.x) * 0.3;
-            } else if (enemyId.startsWith('elite')) {
-                // 精英: Z字形移动
-                enemy.y += speed * this.game.loop.delta / 1000;
-                enemy.x += Math.sin(time * 2 + enemy.y * 0.02) * speed * 0.3 * this.game.loop.delta / 1000;
-            } else {
-                // 轻型: 简单下移+摆动
-                enemy.y += speed * this.game.loop.delta / 1000;
-                enemy.x += Math.sin(time * 3 + enemy.x * 0.1) * 0.5;
+            const ai = this.enemyAIs.get(enemy);
+            if (ai) {
+                ai.update(this.game.loop.delta, this.player.x, this.player.y, sw, sh);
             }
 
-            // 同步光晕位置
             const glow = enemy.getData('glow');
             if (glow && glow.active) {
                 glow.x = enemy.x;
                 glow.y = enemy.y;
             }
 
-            // 移除超出屏幕的敌人
-            if (enemy.y > this.cameras.main.height + 60) {
+            if (enemy.y > sh + 60) {
                 this.destroyEnemy(enemy);
             }
         });
@@ -898,6 +1095,11 @@ export class GameScene extends Phaser.Scene {
         const glow = enemy.getData('glow');
         if (glow && glow.active) {
             glow.destroy();
+        }
+        const ai = this.enemyAIs.get(enemy);
+        if (ai) {
+            ai.destroy();
+            this.enemyAIs.delete(enemy);
         }
         if (enemy.active) {
             enemy.destroy();
@@ -948,15 +1150,14 @@ export class GameScene extends Phaser.Scene {
                 // 敌人死亡
                 const score = enemy.getData('score');
                 const experience = enemy.getData('experience') || 10;
-                this.score += score;
-                this.killCount++;
-
-                // 连击系统
                 this.comboCount++;
                 this.lastKillTime = Date.now();
                 if (this.comboCount > this.maxCombo) {
                     this.maxCombo = this.comboCount;
                 }
+                const comboMultiplier = 1 + (this.comboCount - 1) * 0.1;
+                this.score += Math.floor(score * comboMultiplier);
+                this.killCount++;
 
                 // 重置连击计时器
                 if (this.comboTimer) {
@@ -966,13 +1167,13 @@ export class GameScene extends Phaser.Scene {
                     this.comboCount = 0;
                 });
 
-                // 显示连击特效
                 if (this.comboCount >= 2) {
                     this.particleSystem.createComboEffect(enemy.x, enemy.y, this.comboCount);
+                    audioManager.playProceduralSFX('combo');
                 }
 
-                // 添加爆炸效果
                 this.createExplosion(enemy.x, enemy.y);
+                audioManager.playProceduralSFX('explosion');
 
                 // 添加轻微屏幕震动
                 this.screenEffects.shake(5, 200);
@@ -1044,6 +1245,7 @@ export class GameScene extends Phaser.Scene {
 
             // 升级特效
             this.particleSystem.createLevelUp(this.player.x, this.player.y);
+            audioManager.playProceduralSFX('upgrade');
             this.screenEffects.shakeAndFlash(10, 0x00ff88, 300);
         }
 
@@ -1065,8 +1267,8 @@ export class GameScene extends Phaser.Scene {
         // 创建屏幕震动+闪光效果
         this.screenEffects.shakeAndFlash(15, 0xff0000, 300);
 
-        // 创建玩家受伤粒子效果
         this.particleSystem.createPlayerHit(this.player.x, this.player.y);
+        audioManager.playProceduralSFX('hit');
 
         // 闪烁效果
         const originalColor = this.player.fillColor;
@@ -1104,6 +1306,9 @@ export class GameScene extends Phaser.Scene {
         }
         if (this.waveTimer) {
             this.waveTimer.destroy();
+        }
+        if (this.enemyFireTimer) {
+            this.enemyFireTimer.destroy();
         }
 
         // 停止连击计时器
@@ -1180,6 +1385,9 @@ export class GameScene extends Phaser.Scene {
         if (this.waveTimer) {
             this.waveTimer.destroy();
         }
+        if (this.enemyFireTimer) {
+            this.enemyFireTimer.destroy();
+        }
 
         // 停止所有动画
         this.tweens.killAll();
@@ -1200,6 +1408,9 @@ export class GameScene extends Phaser.Scene {
         // 清理所有游戏对象
         if (this.bullets) {
             this.bullets.clear(true, true);
+        }
+        if (this.enemyBullets) {
+            this.enemyBullets.clear(true, true);
         }
         if (this.enemies) {
             this.enemies.clear(true, true);

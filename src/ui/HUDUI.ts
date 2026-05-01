@@ -161,7 +161,7 @@ export class HUDUI {
         const slotSize = 40;
         const gap = 55;
 
-        const skillKeys = ['Q', 'W', 'E'];
+        const skillKeys = ['Q', 'R', 'F'];
         const skillNames = ['激光射击', '护盾激活', '激光弹幕'];
         const skillColors = [0x00ff88, 0x00aaff, 0xff6600];
 
@@ -484,7 +484,7 @@ export class HUDUI {
         this.controlsHint = this.scene.add.text(
             this.scene.cameras.main.width / 2,
             this.scene.cameras.main.height - 15,
-            'ESC 暂停 | E 装备 | K 技能 | O 设置',
+            'ESC 暂停 | E 装备 | K 技能 | O 设置 | Q/R/F 释放技能',
             {
                 fontSize: '11px',
                 color: '#444444',
@@ -593,10 +593,10 @@ export class HUDUI {
      */
     public updateCombo(combo: number): void {
         if (combo >= 2) {
-            this.comboText.setText(`${combo} COMBO`);
+            const multiplier = 1 + (combo - 1) * 0.1;
+            this.comboText.setText(`${combo} COMBO x${multiplier.toFixed(1)}`);
             this.comboText.setAlpha(1);
 
-            // 连击数越高颜色越亮
             if (combo >= 10) {
                 this.comboText.setColor('#ff0000');
             } else if (combo >= 5) {

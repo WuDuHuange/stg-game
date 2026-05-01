@@ -1,150 +1,166 @@
 /**
- * 敌人AI系统（简化版）
+ * 敌人AI系统 - 状态机驱动，直接操作Phaser GameObject
  */
 
-import { Enemy, EnemyState } from '@data/EnemyData';
-import { logger } from '@utils/Logger';
+import { EnemyState } from '@data/EnemyData';
+
+export interface EnemyAIConfig {
+    chaseRange: number;
+    attackRange: number;
+    retreatHealthPercent: number;
+    patrolSpeed: number;
+    chaseSpeed: number;
+    retreatSpeed: number;
+}
+
+const DEFAULT_CONFIG: EnemyAIConfig = {
+    chaseRange: 400,
+    attackRange: 200,
+    retreatHealthPercent: 0.2,
+    patrolSpeed: 60,
+    chaseSpeed: 120,
+    retreatSpeed: 80
+};
 
 export class EnemyAI {
-  private enemy: Enemy;
-  private target: any;
-  private lastStateChange: number;
-  private stateChangeInterval: number;
+    private enemySprite: any;
+    private state: EnemyState;
+    private lastStateChange: number;
+    private stateChangeInterval: number;
+    private config: EnemyAIConfig;
+    private patrolAngle: number;
+    private patrolDirection: number;
+    private targetY: number;
 
-  constructor(enemy: Enemy) {
-    this.enemy = enemy;
-    this.target = null;
-    this.lastStateChange = 0;
-    this.stateChangeInterval = 1000;
-  }
-
-  /**
-   * 更新AI
-   */
-  public update(deltaTime: number, playerPosition: any): void {
-    if (!this.enemy.isAlive()) {
-      return;
+    constructor(enemySprite: any, config?: Partial<EnemyAIConfig>) {
+        this.enemySprite = enemySprite;
+        this.state = EnemyState.PATROL;
+        this.lastStateChange = 0;
+        this.stateChangeInterval = 800;
+        this.config = { ...DEFAULT_CONFIG, ...config };
+        this.patrolAngle = Math.random() * Math.PI * 2;
+        this.patrolDirection = 1;
+        this.targetY = enemySprite.scene?.cameras?.main?.height * 0.25 ?? 150;
     }
 
-    this.target = playerPosition;
-    const currentState = this.enemy.getCurrentState();
-
-    switch (currentState) {
-      case EnemyState.IDLE:
-        this.updateIdle();
-        break;
-      case EnemyState.PATROL:
-        this.updatePatrol();
-        break;
-      case EnemyState.CHASE:
-        this.updateChase();
-        break;
-      case EnemyState.ATTACK:
-        this.updateAttack();
-        break;
-      case EnemyState.RETREAT:
-        this.updateRetreat();
-        break;
+    public getState(): EnemyState {
+        return this.state;
     }
-  }
 
-  /**
-   * 更新待机状态
-   */
-  private updateIdle(): void {
-    const now = Date.now();
-    if (now - this.lastStateChange > this.stateChangeInterval) {
-      // 检查是否需要追击
-      if (this.shouldChase()) {
-        this.enemy.setCurrentState(EnemyState.CHASE);
-        this.lastStateChange = now;
-      }
+    public update(delta: number, playerX: number, playerY: number, sceneWidth: number, sceneHeight: number): void {
+        if (!this.enemySprite || !this.enemySprite.active) return;
+
+        const dt = delta / 1000;
+        const now = Date.now();
+        const ex = this.enemySprite.x;
+        const ey = this.enemySprite.y;
+        const distToPlayer = Math.sqrt((ex - playerX) ** 2 + (ey - playerY) ** 2);
+        const healthPercent = (this.enemySprite.getData('health') || 1) / (this.enemySprite.getData('maxHealth') || 1);
+
+        this.evaluateState(distToPlayer, healthPercent, now);
+
+        switch (this.state) {
+            case EnemyState.IDLE:
+                this.executeIdle(dt);
+                break;
+            case EnemyState.PATROL:
+                this.executePatrol(dt, sceneWidth, sceneHeight);
+                break;
+            case EnemyState.CHASE:
+                this.executeChase(dt, playerX, playerY);
+                break;
+            case EnemyState.ATTACK:
+                this.executeAttack(dt, playerX, playerY, sceneWidth);
+                break;
+            case EnemyState.RETREAT:
+                this.executeRetreat(dt, sceneHeight);
+                break;
+        }
     }
-  }
 
-  /**
-   * 更新巡逻状态
-   */
-  private updatePatrol(): void {
-    // 简化巡逻逻辑
-    const now = Date.now();
-    if (now - this.lastStateChange > this.stateChangeInterval) {
-      if (this.shouldChase()) {
-        this.enemy.setCurrentState(EnemyState.CHASE);
-        this.lastStateChange = now;
-      }
+    private evaluateState(distToPlayer: number, healthPercent: number, now: number): void {
+        if (now - this.lastStateChange < this.stateChangeInterval) return;
+
+        let newState = this.state;
+
+        if (healthPercent <= this.config.retreatHealthPercent && this.state !== EnemyState.RETREAT) {
+            newState = EnemyState.RETREAT;
+        } else if (this.state === EnemyState.RETREAT && healthPercent > this.config.retreatHealthPercent + 0.1) {
+            newState = EnemyState.CHASE;
+        } else if (distToPlayer <= this.config.attackRange) {
+            newState = EnemyState.ATTACK;
+        } else if (distToPlayer <= this.config.chaseRange) {
+            newState = EnemyState.CHASE;
+        } else {
+            newState = EnemyState.PATROL;
+        }
+
+        if (newState !== this.state) {
+            this.state = newState;
+            this.lastStateChange = now;
+            this.enemySprite.setData('aiState', this.state);
+        }
     }
-  }
 
-  /**
-   * 更新追击状态
-   */
-  private updateChase(): void {
-    // 简化追击逻辑
-    if (this.shouldAttack()) {
-      this.enemy.setCurrentState(EnemyState.ATTACK);
-      this.lastStateChange = Date.now();
-    } else if (!this.shouldChase()) {
-      this.enemy.setCurrentState(EnemyState.PATROL);
-      this.lastStateChange = Date.now();
+    private executeIdle(dt: number): void {
     }
-  }
 
-  /**
-   * 更新攻击状态
-   */
-  private updateAttack(): void {
-    // 简化攻击逻辑
-    const now = Date.now();
-    if (now - this.lastStateChange > this.stateChangeInterval) {
-      if (!this.shouldAttack()) {
-        this.enemy.setCurrentState(EnemyState.CHASE);
-        this.lastStateChange = now;
-      }
+    private executePatrol(dt: number, sceneWidth: number, sceneHeight: number): void {
+        const speed = this.enemySprite.getData('speed') || this.config.patrolSpeed;
+        this.enemySprite.y += speed * dt * 0.5;
+
+        this.patrolAngle += dt * 0.5 * this.patrolDirection;
+        this.enemySprite.x += Math.sin(this.patrolAngle) * speed * 0.3 * dt;
+
+        if (this.enemySprite.x < 30 || this.enemySprite.x > sceneWidth - 30) {
+            this.patrolDirection *= -1;
+        }
     }
-  }
 
-  /**
-   * 更新撤退状态
-   */
-  private updateRetreat(): void {
-    // 简化撤退逻辑
-    const now = Date.now();
-    if (now - this.lastStateChange > this.stateChangeInterval) {
-      if (this.shouldChase()) {
-        this.enemy.setCurrentState(EnemyState.CHASE);
-        this.lastStateChange = now;
-      }
+    private executeChase(dt: number, playerX: number, playerY: number): void {
+        const speed = this.enemySprite.getData('speed') || this.config.chaseSpeed;
+        const dx = playerX - this.enemySprite.x;
+        const dy = playerY - this.enemySprite.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 5) {
+            this.enemySprite.x += (dx / dist) * speed * dt;
+            this.enemySprite.y += (dy / dist) * speed * dt * 0.5;
+        }
     }
-  }
 
-  /**
-   * 检查是否应该追击
-   */
-  private shouldChase(): boolean {
-    // 简化逻辑：总是追击
-    return true;
-  }
+    private executeAttack(dt: number, playerX: number, playerY: number, sceneWidth: number): void {
+        const speed = (this.enemySprite.getData('speed') || 60) * 0.3;
+        const dx = playerX - this.enemySprite.x;
 
-  /**
-   * 检查是否应该攻击
-   */
-  private shouldAttack(): boolean {
-    // 简化逻辑：随机决定
-    return Math.random() < 0.3;
-  }
+        if (Math.abs(dx) > 30) {
+            this.enemySprite.x += Math.sign(dx) * speed * dt;
+        }
 
-  /**
-   * 设置目标
-   */
-  public setTarget(target: any): void {
-    this.target = target;
-  }
+        this.enemySprite.x += Math.sin(Date.now() / 1000 * 2) * speed * 0.5 * dt;
 
-  /**
-   * 获取目标
-   */
-  public getTarget(): any {
-    return this.target;
-  }
+        if (this.enemySprite.x < 30) this.enemySprite.x = 30;
+        if (this.enemySprite.x > sceneWidth - 30) this.enemySprite.x = sceneWidth - 30;
+    }
+
+    private executeRetreat(dt: number, sceneHeight: number): void {
+        const speed = this.enemySprite.getData('speed') || this.config.retreatSpeed;
+        const retreatY = sceneHeight * 0.15;
+
+        if (this.enemySprite.y > retreatY) {
+            this.enemySprite.y -= speed * dt * 0.8;
+        }
+
+        this.enemySprite.x += Math.sin(Date.now() / 1000 * 3) * speed * 0.5 * dt;
+    }
+
+    public forceState(state: EnemyState): void {
+        this.state = state;
+        this.lastStateChange = Date.now();
+        this.enemySprite.setData('aiState', state);
+    }
+
+    public destroy(): void {
+        this.enemySprite = null;
+    }
 }

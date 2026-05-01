@@ -146,6 +146,22 @@ export class ParticleSystem {
     }
 
     /**
+     * 创建敌人子弹拖尾效果 - 橙红色小圆渐隐
+     */
+    public createEnemyBulletTrail(x: number, y: number, color: number = 0xff6600): void {
+        const trail = this.scene.add.circle(x, y, 2, color, 0.6);
+        this.scene.tweens.add({
+            targets: trail,
+            scale: 0,
+            alpha: 0,
+            duration: 250,
+            onComplete: () => {
+                trail.destroy();
+            }
+        });
+    }
+
+    /**
      * 创建升级效果
      */
     public createLevelUp(x: number, y: number): void {
