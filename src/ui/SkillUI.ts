@@ -117,7 +117,7 @@ export class SkillUI {
         const iconText = this.scene.add.text(
             -140,
             0,
-            ['Q', 'W', 'E'][index],
+            ['Q', 'R', 'F'][index],
             {
                 fontSize: '24px',
                 color: '#ffffff',
@@ -125,11 +125,10 @@ export class SkillUI {
             }
         ).setOrigin(0.5);
 
-        // 技能名称
         const skillName = this.scene.add.text(
             -90,
             -25,
-            ['能量冲击', '护盾屏障', '终极毁灭'][index],
+            ['激光射击', '护盾激活', '激光弹幕'][index],
             {
                 fontSize: '20px',
                 color: '#ffd700',
@@ -168,16 +167,17 @@ export class SkillUI {
             0x2a2a3e,
             1
         );
+        progressBg.setOrigin(0.5, 0.5);
 
-        // 强化进度条
         const progressFill = this.scene.add.rectangle(
-            100,
+            40,
             0,
-            [72, 48, 24][index],  // 3/5, 2/5, 1/5
+            [72, 48, 24][index],
             8,
             0x00ffff,
             1
         );
+        progressFill.setOrigin(0, 0.5);
 
         // 强化进度文字
         const progressText = this.scene.add.text(
@@ -201,6 +201,11 @@ export class SkillUI {
             progressFill,
             progressText
         ]);
+
+        slot.setData('nameText', skillName);
+        slot.setData('levelText', skillLevel);
+        slot.setData('progressFill', progressFill);
+        slot.setData('progressText', progressText);
 
         return slot;
     }
@@ -282,7 +287,7 @@ export class SkillUI {
             nameText.setText(data.name);
         }
         if (levelText && levelText.active) {
-            levelText.setText(`Lv.${data.level}/${data.maxLevel}`);
+            levelText.setText(`等级: ${data.level}/${data.maxLevel}`);
         }
     }
 

@@ -162,6 +162,7 @@ export class EquipmentUI {
         detailPanel.setData('equipmentName', equipmentName);
         detailPanel.setData('statsText', statsText);
         detailPanel.setData('enhanceButton', enhanceButton);
+        detailPanel.setData('enhanceText', enhanceText);
 
         this.container.add(detailPanel);
         this.container.setData('detailPanel', detailPanel);
@@ -234,6 +235,7 @@ export class EquipmentUI {
         const equipmentName = detailPanel.getData('equipmentName');
         const statsText = detailPanel.getData('statsText');
         const enhanceButton = detailPanel.getData('enhanceButton');
+        const enhanceText = detailPanel.getData('enhanceText');
 
         // 模拟装备数据
         const equipment = this.getEquipmentData(slotName);
@@ -250,11 +252,13 @@ export class EquipmentUI {
             );
 
             enhanceButton.setVisible(true);
+            if (enhanceText) enhanceText.setVisible(true);
         } else {
             equipmentName.setText('未装备');
             equipmentName.setStyle({ color: '#888888' });
             statsText.setText('');
             enhanceButton.setVisible(false);
+            if (enhanceText) enhanceText.setVisible(false);
         }
     }
 
@@ -275,15 +279,19 @@ export class EquipmentUI {
             if (weapon) {
                 const data = weapon.getData ? weapon.getData() : weapon;
                 const baseStats = data.baseStats || {};
+                const existing = this.equipmentData.get(slotName);
+                const currentLevel = existing ? existing.level : 0;
                 this.equipmentData.set(slotName, {
                     name: data.name || '未知武装',
                     attack: baseStats.damage || 0,
                     defense: baseStats.defense || 0,
                     agility: baseStats.attackSpeed ? Math.round(baseStats.attackSpeed * 10) : 0,
-                    level: 0,
+                    level: currentLevel,
                     maxLevel: 5,
                     rarity: data.rarity || 'COMMON'
                 });
+            } else {
+                this.equipmentData.delete(slotName);
             }
         }
     }

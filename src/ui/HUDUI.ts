@@ -515,11 +515,11 @@ export class HUDUI {
      * 更新血条
      */
     public updateHealth(current: number, max: number): void {
-        const percent = Math.max(0, current / max);
+        const percent = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
         const barWidth = 200;
 
         this.healthBar.width = barWidth * percent;
-        this.healthText.setText(`${Math.ceil(current)}/${max}`);
+        this.healthText.setText(`${Math.ceil(current)}/${Math.ceil(max)}`);
 
         // 血量低时改变颜色
         if (percent < 0.3) {
@@ -539,7 +539,7 @@ export class HUDUI {
         const barWidth = 200;
 
         this.shieldBar.width = barWidth * percent;
-        this.shieldText.setText(`${Math.ceil(current)}/${max}`);
+        this.shieldText.setText(`${Math.ceil(current)}/${Math.ceil(max)}`);
 
         if (percent < 0.3) {
             this.shieldBar.fillColor = 0xff4444;

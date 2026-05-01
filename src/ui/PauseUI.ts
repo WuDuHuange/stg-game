@@ -140,11 +140,9 @@ export class PauseUI {
         if (this.isPaused) return;
         this.isPaused = true;
 
-        // 暂停游戏场景
-        this.scene.scene.pause();
-
-        // 显示暂停UI
         this.show();
+
+        this.scene.scene.pause();
     }
 
     /**
@@ -154,11 +152,9 @@ export class PauseUI {
         if (!this.isPaused) return;
         this.isPaused = false;
 
-        // 隐藏暂停UI
-        this.hide();
-
-        // 恢复游戏场景
         this.scene.scene.resume();
+
+        this.hide();
     }
 
     /**

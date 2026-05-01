@@ -118,10 +118,8 @@ export class ResultUI {
         const buttonY = this.scene.cameras.main.height / 2 + 200;
 
         if (data.isVictory) {
-            // 胜利：继续下一关 + 返回主菜单
-            this.createButton('继续下一关', buttonY - 30, 0x00ff00, () => {
+            this.createButton('重新开始', buttonY - 30, 0x00ff00, () => {
                 this.hide();
-                // 重新开始游戏（下一关）
                 this.scene.scene.restart();
             });
 

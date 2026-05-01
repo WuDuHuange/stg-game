@@ -65,7 +65,6 @@ export class GameScene extends Phaser.Scene {
     private hudUI!: HUDUI;
     private lastShotTime: number = 0;
     private shotCooldown: number = 200;
-    private enemySpawnTimer!: Phaser.Time.TimerEvent;
     private gameOver: boolean = false;
 
     // 关卡波次系统
@@ -481,13 +480,26 @@ export class GameScene extends Phaser.Scene {
                 this.playerManager.restoreShield(shieldRestore);
                 this.updateHUD();
             } else if (index === 2) {
-                // E技能 - 终极技能：对所有敌人造成大量伤害（走正常击杀流程）
                 this.enemies.getChildren().forEach((enemy: any) => {
                     if (enemy.active) {
-                        const enemyHealth = enemy.getData('health') || 20;
-                        enemy.setData('health', 0);
+                        const score = enemy.getData('score') || 100;
+                        const experience = enemy.getData('experience') || 10;
+                        this.score += score;
+                        this.killCount++;
+                        this.comboCount++;
+                        if (this.comboCount > this.maxCombo) {
+                            this.maxCombo = this.comboCount;
+                        }
+                        this.createExplosion(enemy.x, enemy.y);
+                        this.destroyEnemy(enemy);
+                        this.gainExperience(experience);
                     }
                 });
+                if (this.comboCount >= 2) {
+                    this.particleSystem.createComboEffect(this.player.x, this.player.y, this.comboCount);
+                    audioManager.playProceduralSFX('combo');
+                }
+                audioManager.playProceduralSFX('explosion');
                 this.screenEffects.shakeAndFlash(20, 0xffd700, 500);
             }
         }
@@ -1299,11 +1311,6 @@ export class GameScene extends Phaser.Scene {
     private handleGameOver(): void {
         console.log('GameScene: 游戏结束，分数:', this.score);
 
-        // 停止生成敌人
-        if (this.enemySpawnTimer) {
-            this.enemySpawnTimer.destroy();
-            this.enemySpawnTimer = null!;
-        }
         if (this.waveTimer) {
             this.waveTimer.destroy();
         }
@@ -1379,9 +1386,6 @@ export class GameScene extends Phaser.Scene {
         }
 
         // 停止所有定时器
-        if (this.enemySpawnTimer) {
-            this.enemySpawnTimer.destroy();
-        }
         if (this.waveTimer) {
             this.waveTimer.destroy();
         }
