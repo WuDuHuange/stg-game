@@ -419,43 +419,6 @@ export class ParticleSystem {
      * 创建时间流逝效果
      */
     public createTimeEffect(): void {
-        // 创建时间指示器（太阳/月亮）
-        const timeIndicator = this.scene.add.circle(
-            this.scene.cameras.main.width - 80,
-            80,
-            30,
-            0xffd700,
-            0.8
-        );
-
-        // 添加光晕
-        const glow = this.scene.add.circle(
-            this.scene.cameras.main.width - 80,
-            80,
-            50,
-            0xffd700,
-            0.3
-        );
-
-        // 脉动效果 - 上下移动
-        this.scene.tweens.add({
-            targets: timeIndicator,
-            y: 90,  // 向下移动10像素
-            duration: 10000,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
-
-        // 光晕也跟随脉动
-        this.scene.tweens.add({
-            targets: glow,
-            y: 90,  // 向下移动10像素
-            duration: 10000,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-        });
     }
 
     /**

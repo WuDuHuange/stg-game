@@ -85,7 +85,7 @@ export class ResultUI {
         const gap = 45;
 
         // 分数
-        this.createStatRow('最终分数', `${data.score}`, startY, '#ffd700');
+        this.createStatRow('最终分数', data.score.toLocaleString(), startY, '#ffd700');
 
         // 击杀数
         this.createStatRow('击杀数', `${data.enemiesKilled}`, startY + gap, '#ffffff');

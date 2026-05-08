@@ -553,8 +553,8 @@ export class GameScene extends Phaser.Scene {
      */
     private showInstructions(): void {
         const instructions = [
-            'WASD/方向键 移动 | SPACE 射击',
-            'Q/R/F 技能 | ESC 暂停'
+            'WASD 移动 | SPACE 射击 | Q/R/F 技能',
+            'E 装备 | K 技能 | ESC 暂停'
         ];
 
         const instructionTexts: Phaser.GameObjects.Text[] = [];
@@ -721,8 +721,11 @@ export class GameScene extends Phaser.Scene {
             0x00ff00
         );
 
+        const level = this.playerManager.getLevelData().level;
+        const baseDamage = 10 + (level - 1) * 2;
+
         bullet.setData('speed', 500);
-        bullet.setData('damage', 10);
+        bullet.setData('damage', baseDamage);
 
         this.bullets.add(bullet);
 
@@ -915,8 +918,8 @@ export class GameScene extends Phaser.Scene {
     private startLevel(levelIndex: number): void {
         const config = getLevelConfig(`level_${levelIndex + 1}`);
         if (!config) {
-            // 所有关卡完成
             this.levelComplete = true;
+            this.handleVictory();
             return;
         }
 
@@ -924,17 +927,16 @@ export class GameScene extends Phaser.Scene {
         this.currentWaveIndex = 0;
         this.waveEnemiesSpawned = 0;
 
-        // 更新HUD关卡进度
         if (this.hudUI) {
             this.hudUI.setLevelProgress(levelIndex);
             this.hudUI.updateLevelInfo(levelIndex + 1, config.name);
         }
 
-        // 显示关卡开始提示
         this.showLevelStartMessage(config.name);
 
-        // 开始第一波
-        this.startWave();
+        this.time.delayedCall(1500, () => {
+            if (!this.gameOver) this.startWave();
+        });
     }
 
     /**
@@ -942,19 +944,35 @@ export class GameScene extends Phaser.Scene {
      */
     private startWave(): void {
         if (!this.currentLevelConfig || this.currentWaveIndex >= this.currentLevelConfig.waves.length) {
-            // 所有波次完成，进入下一关
-            this.currentLevelIndex++;
-            this.time.delayedCall(2000, () => this.startLevel(this.currentLevelIndex));
+            this.waitForClearAndAdvanceLevel();
             return;
         }
 
         const wave = this.currentLevelConfig.waves[this.currentWaveIndex];
         this.waveEnemiesSpawned = 0;
 
-        // 按波次间隔生成敌人
         this.waveTimer = this.time.addEvent({
             delay: wave.spawnInterval,
             callback: this.spawnWaveEnemy,
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    private waitForClearAndAdvanceLevel(): void {
+        this.showWaveClearMessage();
+
+        const checkInterval = this.time.addEvent({
+            delay: 500,
+            callback: () => {
+                if (this.enemies.getLength() === 0 && !this.gameOver) {
+                    checkInterval.destroy();
+                    this.currentLevelIndex++;
+                    this.time.delayedCall(1000, () => {
+                        if (!this.gameOver) this.startLevel(this.currentLevelIndex);
+                    });
+                }
+            },
             callbackScope: this,
             loop: true
         });
@@ -972,11 +990,15 @@ export class GameScene extends Phaser.Scene {
         const totalEnemies = wave.enemies.reduce((sum, e) => sum + e.count, 0);
 
         if (this.waveEnemiesSpawned >= totalEnemies) {
-            // 当前波次完成
             if (this.waveTimer) this.waveTimer.destroy();
             this.currentWaveIndex++;
 
-            // 等待后开始下一波
+            const nextWaveIndex = this.currentWaveIndex;
+            const totalWaves = this.currentLevelConfig.waves.length;
+            if (nextWaveIndex < totalWaves) {
+                this.showWaveStartMessage(nextWaveIndex + 1, totalWaves);
+            }
+
             this.time.delayedCall(wave.spawnInterval * 2, () => {
                 if (!this.gameOver) this.startWave();
             });
@@ -1073,6 +1095,103 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    private showWaveStartMessage(waveNum: number, totalWaves: number): void {
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        const text = this.add.text(centerX, centerY, `WAVE ${waveNum}/${totalWaves}`, {
+            fontSize: '22px',
+            color: '#00ffcc',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: text,
+            alpha: 0,
+            y: '-=20',
+            duration: 1500,
+            delay: 500,
+            ease: 'Power2.easeOut',
+            onComplete: () => text.destroy()
+        });
+    }
+
+    private showWaveClearMessage(): void {
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        const text = this.add.text(centerX, centerY, 'STAGE CLEAR', {
+            fontSize: '32px',
+            color: '#ffd700',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        this.screenEffects.shakeAndFlash(10, 0xffd700, 400);
+
+        this.tweens.add({
+            targets: text,
+            scale: 1.3,
+            alpha: 0,
+            duration: 2500,
+            delay: 500,
+            ease: 'Power2.easeOut',
+            onComplete: () => text.destroy()
+        });
+    }
+
+    private handleVictory(): void {
+        this.gameOver = true;
+
+        if (this.waveTimer) this.waveTimer.destroy();
+        if (this.enemyFireTimer) this.enemyFireTimer.destroy();
+        if (this.comboTimer) this.comboTimer.destroy();
+
+        this.enemies.getChildren().forEach((enemy: any) => {
+            this.createExplosion(enemy.x, enemy.y);
+            this.destroyEnemy(enemy);
+        });
+        this.enemyBullets.clear(true, true);
+
+        this.screenEffects.shakeAndFlash(15, 0xffd700, 800);
+        audioManager.playProceduralSFX('upgrade');
+
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        const victoryText = this.add.text(centerX, centerY - 40, 'VICTORY', {
+            fontSize: '48px',
+            color: '#ffd700',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: victoryText,
+            scale: 1.2,
+            duration: 500,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                victoryText.destroy();
+                this.currentUILayer = UILayerLevel.RESULT;
+                this.resultUI.showResult({
+                    isVictory: true,
+                    score: this.score,
+                    enemiesKilled: this.killCount,
+                    maxCombo: this.maxCombo,
+                    timeElapsed: this.time.now / 1000,
+                    level: this.currentLevelIndex + 1
+                });
+            }
+        });
+    }
+
     /**
      * 更新敌人
      */
@@ -1107,6 +1226,10 @@ export class GameScene extends Phaser.Scene {
         const glow = enemy.getData('glow');
         if (glow && glow.active) {
             glow.destroy();
+        }
+        const healthBar = enemy.getData('healthBar');
+        if (healthBar && healthBar.active) {
+            healthBar.destroy();
         }
         const ai = this.enemyAIs.get(enemy);
         if (ai) {
@@ -1168,8 +1291,10 @@ export class GameScene extends Phaser.Scene {
                     this.maxCombo = this.comboCount;
                 }
                 const comboMultiplier = 1 + (this.comboCount - 1) * 0.1;
-                this.score += Math.floor(score * comboMultiplier);
+                const earnedScore = Math.floor(score * comboMultiplier);
+                this.score += earnedScore;
                 this.killCount++;
+                this.showFloatingScore(enemy.x, enemy.y, earnedScore, comboMultiplier);
 
                 // 重置连击计时器
                 if (this.comboTimer) {
@@ -1196,10 +1321,9 @@ export class GameScene extends Phaser.Scene {
                 // 获取经验值
                 this.gainExperience(experience);
             } else {
-                // 敌人受伤
                 enemy.setData('health', newHealth);
+                this.showEnemyHealthBar(enemy, newHealth, enemy.getData('maxHealth'));
 
-                // 闪烁效果
                 const originalColor = enemy.fillColor;
                 enemy.setFillStyle(0xffffff);
 
@@ -1342,6 +1466,49 @@ export class GameScene extends Phaser.Scene {
      */
     private createExplosion(x: number, y: number): void {
         this.particleSystem.createEnemyDeath(x, y);
+    }
+
+    private showFloatingScore(x: number, y: number, score: number, multiplier: number): void {
+        const color = multiplier > 1.5 ? '#ff4444' : multiplier > 1.0 ? '#ffaa00' : '#ffffff';
+        const text = this.add.text(x, y - 15, `+${score}`, {
+            fontSize: multiplier > 1.5 ? '20px' : '16px',
+            color,
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: text,
+            y: y - 50,
+            alpha: 0,
+            duration: 800,
+            ease: 'Power2.easeOut',
+            onComplete: () => text.destroy()
+        });
+    }
+
+    private showEnemyHealthBar(enemy: any, health: number, maxHealth: number): void {
+        let healthBar = enemy.getData('healthBar');
+        if (!healthBar || !healthBar.active) {
+            healthBar = this.add.rectangle(0, 0, 30, 3, 0xff0000, 0.8);
+            healthBar.setOrigin(0, 0.5);
+            enemy.setData('healthBar', healthBar);
+        }
+
+        const radius = enemy.radius || 15;
+        healthBar.x = enemy.x - 15;
+        healthBar.y = enemy.y - radius - 6;
+        const percent = maxHealth > 0 ? Math.max(0, health / maxHealth) : 0;
+        healthBar.width = 30 * percent;
+        healthBar.fillColor = percent > 0.5 ? 0x00ff00 : percent > 0.25 ? 0xffaa00 : 0xff0000;
+
+        this.time.delayedCall(800, () => {
+            if (healthBar && healthBar.active) {
+                healthBar.destroy();
+                enemy.setData('healthBar', null);
+            }
+        });
     }
 
     /**
