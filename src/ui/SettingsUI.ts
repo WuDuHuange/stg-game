@@ -31,25 +31,31 @@ export class SettingsUI {
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
-        this.settings = {
-            graphics: {
-                quality: 2,
-                fullscreen: false,
-                vsync: true
-            },
-            audio: {
-                masterVolume: 80,
-                musicVolume: 70,
-                sfxVolume: 90
-            },
-            controls: {
-                moveUp: 'W',
-                moveDown: 'S',
-                moveLeft: 'A',
-                moveRight: 'D',
-                shoot: 'SPACE'
-            }
+        this.settings = this.loadSettings();
+    }
+
+    private getDefaultSettings() {
+        return {
+            graphics: { quality: 2, fullscreen: false, vsync: true },
+            audio: { masterVolume: 80, musicVolume: 70, sfxVolume: 90 },
+            controls: { moveUp: 'W', moveDown: 'S', moveLeft: 'A', moveRight: 'D', shoot: 'SPACE' }
         };
+    }
+
+    private loadSettings() {
+        try {
+            const saved = localStorage.getItem('stg_settings');
+            if (saved) {
+                return { ...this.getDefaultSettings(), ...JSON.parse(saved) };
+            }
+        } catch {}
+        return this.getDefaultSettings();
+    }
+
+    private saveSettings(): void {
+        try {
+            localStorage.setItem('stg_settings', JSON.stringify(this.settings));
+        } catch {}
     }
 
     /**
@@ -190,17 +196,18 @@ export class SettingsUI {
         // 画质设置
         this.createSettingOption(content, -50, '画质', ['低', '中', '高'], this.settings.graphics.quality, (value) => {
             this.settings.graphics.quality = value;
+            this.saveSettings();
         });
 
-        // 全屏设置
         this.createToggleOption(content, 20, '全屏', this.settings.graphics.fullscreen, (value) => {
             this.settings.graphics.fullscreen = value;
+            this.saveSettings();
             this.scene.scale.toggleFullscreen();
         });
 
-        // 垂直同步
         this.createToggleOption(content, 90, '垂直同步', this.settings.graphics.vsync, (value) => {
             this.settings.graphics.vsync = value;
+            this.saveSettings();
         });
 
         this.container.add(content);
@@ -220,16 +227,20 @@ export class SettingsUI {
         // 主音量
         this.createSliderOption(content, -50, '主音量', this.settings.audio.masterVolume, (value) => {
             this.settings.audio.masterVolume = value;
+            this.saveSettings();
+            this.applyAudioSettings();
         });
 
-        // 音乐音量
         this.createSliderOption(content, 20, '音乐音量', this.settings.audio.musicVolume, (value) => {
             this.settings.audio.musicVolume = value;
+            this.saveSettings();
+            this.applyAudioSettings();
         });
 
-        // 音效音量
         this.createSliderOption(content, 90, '音效音量', this.settings.audio.sfxVolume, (value) => {
             this.settings.audio.sfxVolume = value;
+            this.saveSettings();
+            this.applyAudioSettings();
         });
 
         this.container.add(content);
@@ -500,9 +511,16 @@ export class SettingsUI {
         return this.settings;
     }
 
-    /**
-     * 清理设置UI
-     */
+    private applyAudioSettings(): void {
+        try {
+            const am = (this.scene as any).game?.registry?.get('audioManager');
+            if (am) {
+                am.setMasterVolume(this.settings.audio.masterVolume / 100);
+                am.setSFXVolume(this.settings.audio.sfxVolume / 100);
+            }
+        } catch {}
+    }
+
     public destroy(): void {
         if (this.container) {
             this.container.destroy();

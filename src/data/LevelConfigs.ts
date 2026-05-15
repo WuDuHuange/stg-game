@@ -307,7 +307,7 @@ const LEVEL_DATABASE: LevelConfig[] = [
         waves: [
             {
                 enemies: [
-                    { id: 'light_scout', count: 5 }
+                    { id: 'light_scout', count: 4 }
                 ],
                 delay: 0,
                 spawnInterval: 2000
@@ -317,8 +317,16 @@ const LEVEL_DATABASE: LevelConfig[] = [
                     { id: 'light_scout', count: 3 },
                     { id: 'light_drone', count: 2 }
                 ],
-                delay: 15000,
+                delay: 8000,
                 spawnInterval: 1800
+            },
+            {
+                enemies: [
+                    { id: 'light_drone', count: 4 },
+                    { id: 'light_scout', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 1500
             }
         ],
         backgroundSpeed: 1,
@@ -332,20 +340,36 @@ const LEVEL_DATABASE: LevelConfig[] = [
         waves: [
             {
                 enemies: [
-                    { id: 'light_drone', count: 4 },
-                    { id: 'heavy_tank', count: 1 }
+                    { id: 'light_drone', count: 3 },
+                    { id: 'light_scout', count: 2 }
                 ],
                 delay: 0,
-                spawnInterval: 2000
+                spawnInterval: 1800
             },
             {
                 enemies: [
                     { id: 'light_scout', count: 3 },
-                    { id: 'light_drone', count: 3 },
+                    { id: 'heavy_tank', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 1600
+            },
+            {
+                enemies: [
+                    { id: 'light_drone', count: 4 },
                     { id: 'heavy_tank', count: 2 }
                 ],
-                delay: 20000,
-                spawnInterval: 1500
+                delay: 8000,
+                spawnInterval: 1400
+            },
+            {
+                enemies: [
+                    { id: 'light_interceptor', count: 2 },
+                    { id: 'heavy_tank', count: 2 },
+                    { id: 'light_scout', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 1200
             }
         ],
         backgroundSpeed: 1.2,
@@ -359,10 +383,27 @@ const LEVEL_DATABASE: LevelConfig[] = [
         waves: [
             {
                 enemies: [
-                    { id: 'light_scout', count: 3 }
+                    { id: 'light_scout', count: 3 },
+                    { id: 'light_drone', count: 2 }
                 ],
                 delay: 0,
-                spawnInterval: 2000
+                spawnInterval: 1800
+            },
+            {
+                enemies: [
+                    { id: 'light_interceptor', count: 2 },
+                    { id: 'heavy_tank', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 1500
+            },
+            {
+                enemies: [
+                    { id: 'light_drone', count: 3 },
+                    { id: 'boss_guardian', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 3000
             }
         ],
         bossId: 'boss_guardian',
@@ -378,26 +419,35 @@ const LEVEL_DATABASE: LevelConfig[] = [
             {
                 enemies: [
                     { id: 'light_interceptor', count: 3 },
-                    { id: 'heavy_tank', count: 2 }
+                    { id: 'heavy_tank', count: 1 }
                 ],
                 delay: 0,
-                spawnInterval: 1800
+                spawnInterval: 1600
             },
             {
                 enemies: [
                     { id: 'elite_commander', count: 1 },
-                    { id: 'light_drone', count: 4 }
+                    { id: 'light_drone', count: 3 }
                 ],
-                delay: 20000,
-                spawnInterval: 1500
+                delay: 8000,
+                spawnInterval: 1400
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 1 },
+                    { id: 'light_interceptor', count: 3 },
+                    { id: 'heavy_tank', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 1200
             },
             {
                 enemies: [
                     { id: 'elite_assassin', count: 2 },
-                    { id: 'heavy_fortress', count: 1 }
+                    { id: 'elite_commander', count: 1 }
                 ],
-                delay: 40000,
-                spawnInterval: 1200
+                delay: 8000,
+                spawnInterval: 1500
             }
         ],
         backgroundSpeed: 1.5,
@@ -416,6 +466,24 @@ const LEVEL_DATABASE: LevelConfig[] = [
                 ],
                 delay: 0,
                 spawnInterval: 1500
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 2 },
+                    { id: 'heavy_fortress', count: 1 },
+                    { id: 'light_drone', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 1200
+            },
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 1 },
+                    { id: 'heavy_tank', count: 2 },
+                    { id: 'boss_destroyer', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 3000
             }
         ],
         bossId: 'boss_destroyer',

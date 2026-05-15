@@ -21,7 +21,7 @@ export class WeaponLoader {
       
       // 这里应该从文件加载配置
       // 暂时使用示例数据
-      const exampleWeapons = this.createExampleWeapons();
+      const exampleWeapons = WeaponLoader.createExampleWeapons();
       
       exampleWeapons.forEach(weaponData => {
         this.weaponDatabase.set(weaponData.weaponId, weaponData);
@@ -38,7 +38,7 @@ export class WeaponLoader {
   /**
    * 创建示例武装数据
    */
-  private createExampleWeapons(): WeaponData[] {
+  public static createExampleWeapons(): WeaponData[] {
     return [
       {
         weaponId: 'laser_gun_basic',
@@ -137,6 +137,34 @@ export class WeaponLoader {
         synergyIds: ['drone_swarm'],
         iconPath: 'assets/textures/weapons/drone_launcher.png',
         modelPath: 'assets/models/weapons/drone_launcher.glb',
+        maxEnhancementLevel: 5
+      },
+      {
+        weaponId: 'thruster_boots_basic',
+        name: '基础推进靴',
+        type: 'SPECIAL' as any,
+        rarity: 'RARE' as any,
+        description: '装备推进靴提升机动性和闪避能力',
+        baseStats: {
+          damage: 3,
+          attackSpeed: 0.5,
+          range: 0,
+          accuracy: 0,
+          criticalChance: 0.08,
+          criticalDamage: 1.5
+        },
+        specialEffects: [
+          {
+            id: 'speed_boost',
+            name: '速度提升',
+            description: '提升移动速度',
+            value: 20
+          }
+        ],
+        associatedSkillId: 'auto_reload',
+        synergyIds: ['laser_rapid_fire'],
+        iconPath: 'assets/textures/weapons/thruster_boots.png',
+        modelPath: 'assets/models/weapons/thruster_boots.glb',
         maxEnhancementLevel: 5
       }
     ];

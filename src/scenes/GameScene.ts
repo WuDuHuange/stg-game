@@ -13,7 +13,7 @@ import { audioManager } from '@systems/AudioManager';
 import { PlayerManager } from '@game/PlayerManager';
 import { WeaponManager } from '@game/WeaponManager';
 import { WeaponLoader } from '@data/WeaponLoader';
-import { SlotType } from '@data/WeaponData';
+import { SlotType, Weapon } from '@data/WeaponData';
 import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
@@ -530,14 +530,14 @@ export class GameScene extends Phaser.Scene {
      * 装备初始武器（从WeaponLoader获取）
      */
     private equipStartingWeapons(): void {
-        const weapons = WeaponLoader.createExampleWeapons();
+        const weaponDataList = WeaponLoader.createExampleWeapons();
         const slotTypes = [SlotType.LEFT_HAND, SlotType.RIGHT_HAND, SlotType.HEAD, SlotType.TORSO, SlotType.LEGS];
 
-        for (let i = 0; i < Math.min(weapons.length, slotTypes.length); i++) {
-            this.weaponManager.equipWeapon(slotTypes[i], weapons[i]);
+        for (let i = 0; i < Math.min(weaponDataList.length, slotTypes.length); i++) {
+            const weapon = new Weapon(weaponDataList[i]);
+            this.weaponManager.equipWeapon(slotTypes[i], weapon);
         }
 
-        // 更新协同效果
         this.synergySystem.checkSynergies(this.weaponManager.getAllEquippedWeapons());
     }
 

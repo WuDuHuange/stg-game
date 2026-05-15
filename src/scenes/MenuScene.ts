@@ -52,7 +52,7 @@ export class MenuScene extends Phaser.Scene {
         this.versionText = this.add.text(
             this.cameras.main.width - 10,
             this.cameras.main.height - 10,
-            'v0.1.0',
+            'v3.8',
             {
                 fontSize: '12px',
                 color: '#666666'
