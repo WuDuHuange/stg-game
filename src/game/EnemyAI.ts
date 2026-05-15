@@ -155,6 +155,7 @@ export class EnemyAI {
     }
 
     public forceState(state: EnemyState): void {
+        if (!this.enemySprite) return;
         this.state = state;
         this.lastStateChange = Date.now();
         this.enemySprite.setData('aiState', state);

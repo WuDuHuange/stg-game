@@ -400,6 +400,7 @@ export class ParticleSystem {
                 Phaser.Math.Between(0, this.scene.cameras.main.width),
                 Phaser.Math.Between(-50, 0),
                 2,
+                15,
                 0x6699cc,
                 0.6
             );

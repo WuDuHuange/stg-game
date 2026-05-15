@@ -38,16 +38,6 @@ export interface EnemyConfig {
 }
 
 /**
- * 弱点配置
- */
-export interface WeakPointConfig {
-    offsetX: number;
-    offsetY: number;
-    radius: number;
-    damageMultiplier: number;
-}
-
-/**
  * Boss阶段配置
  */
 export interface BossPhaseConfig {

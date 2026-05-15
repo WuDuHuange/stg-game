@@ -3,11 +3,12 @@
  * 检测武装组合并触发协同效果
  */
 
-import { Weapon, SlotType } from '@data/WeaponData';
+import { Weapon, SlotType, WeaponType } from '@data/WeaponData';
 import {
   SynergyData,
   WeaponRequirement,
   ActiveSynergy,
+  SynergyEffectType,
   SynergyEffect
 } from '@data/SynergyData';
 import { logger } from '@utils/Logger';
@@ -40,12 +41,12 @@ export class SynergySystem {
         name: '激光速射',
         description: '装备两把激光武器时，攻击速度提升20%',
         requiredWeapons: [
-          { weaponType: 'RANGED' as any },
-          { weaponType: 'RANGED' as any }
+          { weaponType: WeaponType.RANGED },
+          { weaponType: WeaponType.RANGED }
         ],
         effects: [
           {
-            type: 'ATTACK_SPEED_BOOST' as any,
+            type: SynergyEffectType.ATTACK_SPEED_BOOST,
             value: 0.2,
             description: '攻击速度 +20%'
           }
@@ -58,12 +59,12 @@ export class SynergySystem {
         name: '刀锋冲刺',
         description: '装备近战武器和推进器时，移动速度提升30%',
         requiredWeapons: [
-          { weaponType: 'MELEE' as any },
-          { weaponType: 'SPECIAL' as any }
+          { weaponType: WeaponType.MELEE },
+          { weaponType: WeaponType.SPECIAL }
         ],
         effects: [
           {
-            type: 'SPECIAL_EFFECT' as any,
+            type: SynergyEffectType.SPECIAL_EFFECT,
             value: 0.3,
             description: '移动速度 +30%'
           }
@@ -76,12 +77,12 @@ export class SynergySystem {
         name: '护盾反射',
         description: '装备护盾发生器和防御武装时，有10%几率反射伤害',
         requiredWeapons: [
-          { weaponType: 'DEFENSE' as any },
-          { weaponType: 'DEFENSE' as any }
+          { weaponType: WeaponType.DEFENSE },
+          { weaponType: WeaponType.DEFENSE }
         ],
         effects: [
           {
-            type: 'DEFENSE_BOOST' as any,
+            type: SynergyEffectType.DEFENSE_BOOST,
             value: 0.1,
             description: '反射伤害 10%'
           }
@@ -94,12 +95,12 @@ export class SynergySystem {
         name: '无人机群',
         description: '装备两个无人机发射器时，无人机数量翻倍',
         requiredWeapons: [
-          { weaponType: 'SPECIAL' as any },
-          { weaponType: 'SPECIAL' as any }
+          { weaponType: WeaponType.SPECIAL },
+          { weaponType: WeaponType.SPECIAL }
         ],
         effects: [
           {
-            type: 'SPECIAL_EFFECT' as any,
+            type: SynergyEffectType.SPECIAL_EFFECT,
             value: 2.0,
             description: '无人机数量 x2'
           }
@@ -112,14 +113,14 @@ export class SynergySystem {
         name: '全面进攻',
         description: '装备4个攻击型武装时，所有伤害提升25%',
         requiredWeapons: [
-          { weaponType: 'RANGED' as any },
-          { weaponType: 'RANGED' as any },
-          { weaponType: 'MELEE' as any },
-          { weaponType: 'SPECIAL' as any }
+          { weaponType: WeaponType.RANGED },
+          { weaponType: WeaponType.RANGED },
+          { weaponType: WeaponType.MELEE },
+          { weaponType: WeaponType.SPECIAL }
         ],
         effects: [
           {
-            type: 'DAMAGE_BOOST' as any,
+            type: SynergyEffectType.DAMAGE_BOOST,
             value: 0.25,
             description: '所有伤害 +25%'
           }

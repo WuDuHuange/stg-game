@@ -1150,7 +1150,8 @@ export class GameScene extends Phaser.Scene {
         if (this.enemyFireTimer) this.enemyFireTimer.destroy();
         if (this.comboTimer) this.comboTimer.destroy();
 
-        this.enemies.getChildren().forEach((enemy: any) => {
+        const enemiesToClear = this.enemies.getChildren().slice();
+        enemiesToClear.forEach((enemy: any) => {
             this.createExplosion(enemy.x, enemy.y);
             this.destroyEnemy(enemy);
         });

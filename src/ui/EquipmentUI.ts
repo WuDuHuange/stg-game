@@ -232,6 +232,7 @@ export class EquipmentUI {
      */
     private showEquipmentDetail(slotName: string): void {
         const detailPanel = this.container.getData('detailPanel');
+        if (!detailPanel) return;
         const equipmentName = detailPanel.getData('equipmentName');
         const statsText = detailPanel.getData('statsText');
         const enhanceButton = detailPanel.getData('enhanceButton');

@@ -2,7 +2,7 @@
  * 武装配置加载器
  */
 
-import { WeaponData, Weapon } from './WeaponData';
+import { WeaponData, Weapon, WeaponType, Rarity } from './WeaponData';
 import { logger } from '@utils/Logger';
 
 /**
@@ -43,8 +43,8 @@ export class WeaponLoader {
       {
         weaponId: 'laser_gun_basic',
         name: '基础激光枪',
-        type: 'RANGED' as any,
-        rarity: 'COMMON' as any,
+        type: WeaponType.RANGED,
+        rarity: Rarity.COMMON,
         description: '一把基础的激光武器，适合新手使用',
         baseStats: {
           damage: 10,
@@ -64,8 +64,8 @@ export class WeaponLoader {
       {
         weaponId: 'energy_blade_basic',
         name: '基础能量刃',
-        type: 'MELEE' as any,
-        rarity: 'COMMON' as any,
+        type: WeaponType.MELEE,
+        rarity: Rarity.COMMON,
         description: '一把近战能量武器，可以快速攻击敌人',
         baseStats: {
           damage: 25,
@@ -85,8 +85,8 @@ export class WeaponLoader {
       {
         weaponId: 'shield_generator_basic',
         name: '基础护盾发生器',
-        type: 'DEFENSE' as any,
-        rarity: 'COMMON' as any,
+        type: WeaponType.DEFENSE,
+        rarity: Rarity.COMMON,
         description: '可以产生能量护盾，保护玩家免受伤害',
         baseStats: {
           damage: 0,
@@ -114,8 +114,8 @@ export class WeaponLoader {
       {
         weaponId: 'drone_launcher_basic',
         name: '基础无人机发射器',
-        type: 'SPECIAL' as any,
-        rarity: 'RARE' as any,
+        type: WeaponType.SPECIAL,
+        rarity: Rarity.RARE,
         description: '可以发射无人机自动攻击敌人',
         baseStats: {
           damage: 5,
@@ -142,8 +142,8 @@ export class WeaponLoader {
       {
         weaponId: 'thruster_boots_basic',
         name: '基础推进靴',
-        type: 'SPECIAL' as any,
-        rarity: 'RARE' as any,
+        type: WeaponType.SPECIAL,
+        rarity: Rarity.RARE,
         description: '装备推进靴提升机动性和闪避能力',
         baseStats: {
           damage: 3,
