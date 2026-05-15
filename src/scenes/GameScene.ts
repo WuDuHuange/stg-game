@@ -978,6 +978,20 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    private waitForWaveClear(onClear: () => void): void {
+        const check = this.time.addEvent({
+            delay: 300,
+            callback: () => {
+                if (this.enemies.getLength() === 0 && !this.gameOver) {
+                    check.destroy();
+                    onClear();
+                }
+            },
+            callbackScope: this,
+            loop: true
+        });
+    }
+
     private waitForClearAndAdvanceLevel(): void {
         this.showWaveClearMessage();
 
@@ -1010,16 +1024,20 @@ export class GameScene extends Phaser.Scene {
 
         if (this.waveEnemiesSpawned >= totalEnemies) {
             if (this.waveTimer) this.waveTimer.destroy();
-            this.currentWaveIndex++;
 
-            const nextWaveIndex = this.currentWaveIndex;
+            const nextWaveIndex = this.currentWaveIndex + 1;
             const totalWaves = this.currentLevelConfig.waves.length;
-            if (nextWaveIndex < totalWaves) {
-                this.showWaveStartMessage(nextWaveIndex + 1, totalWaves);
-            }
 
-            this.time.delayedCall(wave.spawnInterval * 2, () => {
-                if (!this.gameOver) this.startWave();
+            this.waitForWaveClear(() => {
+                this.currentWaveIndex = nextWaveIndex;
+                if (nextWaveIndex < totalWaves) {
+                    this.showWaveStartMessage(nextWaveIndex + 1, totalWaves);
+                    this.time.delayedCall(1500, () => {
+                        if (!this.gameOver) this.startWave();
+                    });
+                } else {
+                    this.waitForClearAndAdvanceLevel();
+                }
             });
             return;
         }
@@ -1413,46 +1431,80 @@ export class GameScene extends Phaser.Scene {
         const centerX = this.cameras.main.width / 2;
         const centerY = this.cameras.main.height / 2;
 
-        const bg = this.add.rectangle(centerX, centerY, 400, 200, 0x000000, 0.8);
+        const bg = this.add.rectangle(centerX, centerY, 460, 240, 0x000000, 0.85);
         bg.setStrokeStyle(2, 0x00ff88);
-        const title = this.add.text(centerX, centerY - 75, `LEVEL UP! Lv.${level}`, {
+        const title = this.add.text(centerX, centerY - 90, `LEVEL UP! Lv.${level}`, {
             fontSize: '24px', color: '#00ff88', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
         }).setOrigin(0.5);
 
-        const options = [
-            { label: '攻击 +15%', action: () => { this.playerManager.addStat(StatType.MAX_HEALTH, 5); } },
-            { label: '射速 +20%', action: () => { this.shotCooldown = Math.max(80, this.shotCooldown * 0.8); } },
-            { label: '护盾 +20', action: () => { this.playerManager.addStat(StatType.MAX_SHIELD, 20); this.playerManager.restoreShield(20); } },
+        const allOptions = [
+            { label: '攻击 +15%', desc: '属性', color: '#ff6666', action: () => { this.playerManager.addStat(StatType.MAX_HEALTH, 8); } },
+            { label: '射速 +20%', desc: '属性', color: '#ffaa44', action: () => { this.shotCooldown = Math.max(80, this.shotCooldown * 0.8); } },
+            { label: '护盾 +20', desc: '属性', color: '#44aaff', action: () => { this.playerManager.addStat(StatType.MAX_SHIELD, 20); this.playerManager.restoreShield(20); } },
+            { label: '装备强化', desc: '装备', color: '#ffaa00', action: () => { this.enhanceRandomWeapon(); } },
+            { label: '技能冷却-15%', desc: '技能', color: '#cc44ff', action: () => { for (let i = 0; i < 3; i++) this.skillMaxCooldowns[i] *= 0.85; } },
         ];
 
         const optionTexts: Phaser.GameObjects.Text[] = [];
-        options.forEach((opt, i) => {
-            const txt = this.add.text(centerX - 120 + i * 120, centerY + 10, opt.label, {
-                fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1,
-                backgroundColor: '#333355', padding: { x: 8, y: 6 }
-            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        const optionBoxes: Phaser.GameObjects.Rectangle[] = [];
+        const optionDescs: Phaser.GameObjects.Text[] = [];
 
-            txt.on('pointerover', () => txt.setStyle({ color: '#00ff88' }));
-            txt.on('pointerout', () => txt.setStyle({ color: '#ffffff' }));
-            txt.on('pointerdown', () => {
+        allOptions.forEach((opt, i) => {
+            const row = Math.floor(i / 3);
+            const col = i % 3;
+            const x = centerX - 140 + col * 140;
+            const y = centerY - 30 + row * 55;
+
+            const box = this.add.rectangle(x, y, 120, 42, 0x222244, 0.9);
+            box.setStrokeStyle(1, 0x444466);
+            box.setInteractive({ useHandCursor: true });
+
+            const txt = this.add.text(x, y - 6, opt.label, {
+                fontSize: '13px', color: opt.color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 1
+            }).setOrigin(0.5);
+
+            const descTxt = this.add.text(x, y + 12, `[${opt.desc}]`, {
+                fontSize: '10px', color: '#888888'
+            }).setOrigin(0.5);
+
+            box.on('pointerover', () => { box.setFillStyle(0x333366); txt.setStyle({ color: '#00ff88' }); });
+            box.on('pointerout', () => { box.setFillStyle(0x222244); txt.setStyle({ color: opt.color }); });
+            box.on('pointerdown', () => {
                 opt.action();
-                this.closeLevelUpUI(bg, title, optionTexts);
+                this.closeLevelUpUI(bg, title, optionTexts, optionBoxes, optionDescs);
             });
+
             optionTexts.push(txt);
+            optionBoxes.push(box);
+            optionDescs.push(descTxt);
         });
 
-        this.time.delayedCall(8000, () => {
+        this.time.delayedCall(10000, () => {
             if (bg.active) {
-                options[0].action();
-                this.closeLevelUpUI(bg, title, optionTexts);
+                allOptions[0].action();
+                this.closeLevelUpUI(bg, title, optionTexts, optionBoxes, optionDescs);
             }
         });
     }
 
-    private closeLevelUpUI(bg: any, title: any, options: any[]): void {
+    private enhanceRandomWeapon(): void {
+        const slotTypes = [SlotType.LEFT_HAND, SlotType.RIGHT_HAND, SlotType.HEAD, SlotType.TORSO, SlotType.LEGS];
+        for (const slot of slotTypes) {
+            const weapon = this.weaponManager.getEquippedWeapon(slot);
+            if (weapon && weapon.getEnhancementLevel() < weapon.getData().maxEnhancementLevel) {
+                weapon.enhance();
+                break;
+            }
+        }
+        this.synergySystem.checkSynergies(this.weaponManager.getAllEquippedWeapons());
+    }
+
+    private closeLevelUpUI(bg: any, title: any, texts: any[], boxes: any[], descs: any[]): void {
         if (bg.active) bg.destroy();
         if (title.active) title.destroy();
-        options.forEach(o => { if (o && o.active) o.destroy(); });
+        texts.forEach(o => { if (o && o.active) o.destroy(); });
+        boxes.forEach(o => { if (o && o.active) o.destroy(); });
+        descs.forEach(o => { if (o && o.active) o.destroy(); });
         this.currentUILayer = UILayerLevel.NONE;
         this.updateHUD();
     }
