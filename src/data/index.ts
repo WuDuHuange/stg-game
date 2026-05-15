@@ -86,3 +86,21 @@ export {
   getRandomEnemyByRarity,
   getEnemiesForLevel
 } from './LevelConfigs';
+
+export {
+    EquipBranch,
+    EquipEvolutionNode,
+    EquipEvolutionLine,
+    getEquipEvolutionLine,
+    getEquipEvolutionNode,
+    getNextEquipNodes
+} from './EquipEvolution';
+
+export {
+    SkillBranch,
+    SkillEvolutionNode,
+    SkillEvolutionLine,
+    getSkillEvolutionLine,
+    getSkillEvolutionNode,
+    getNextSkillNodes
+} from './SkillEvolution';

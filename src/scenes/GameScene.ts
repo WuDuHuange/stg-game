@@ -17,6 +17,11 @@ import { SlotType, Weapon } from '@data/WeaponData';
 import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
+import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
+import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
+
+function EquipBranch_label(b: EquipBranch): string { return b === EquipBranch.ASSAULT ? '突击' : '防御'; }
+function SkillBranch_label(b: SkillBranch): string { return b === SkillBranch.POWER ? '威力' : '辅助'; }
 import { SkillUI } from '@ui/SkillUI';
 import { SettingsUI } from '@ui/SettingsUI';
 import { PauseUI } from '@ui/PauseUI';
@@ -98,6 +103,8 @@ export class GameScene extends Phaser.Scene {
     private weaponManager!: WeaponManager;
     private boundSkillIds: string[] = ['laser_shot', 'shield_activate', 'laser_barrage']; // Q/R/F绑定的技能ID
     private enemyAIs: Map<any, EnemyAI> = new Map();
+    private equipEvolutionState: Map<string, string> = new Map();
+    private skillEvolutionState: Map<number, string> = new Map();
 
     constructor() {
         super({ key: 'GameScene' });
@@ -196,7 +203,8 @@ export class GameScene extends Phaser.Scene {
         // 显示操作提示
         this.showInstructions();
 
-        // 开始生成敌人
+        this.createDebugButton();
+
         this.startEnemySpawning();
 
         // 淡入效果
@@ -604,6 +612,16 @@ export class GameScene extends Phaser.Scene {
                     });
                 }
             });
+        });
+    }
+
+    private createDebugButton(): void {
+        const btn = this.add.text(10, 10, '[DEBUG] +1LV', {
+            fontSize: '12px', color: '#ffff00', backgroundColor: '#333333', padding: { x: 6, y: 3 }
+        }).setInteractive({ useHandCursor: true }).setDepth(999);
+
+        btn.on('pointerdown', () => {
+            this.gainExperience(9999);
         });
     }
 
@@ -1431,19 +1449,50 @@ export class GameScene extends Phaser.Scene {
         const centerX = this.cameras.main.width / 2;
         const centerY = this.cameras.main.height / 2;
 
-        const bg = this.add.rectangle(centerX, centerY, 460, 240, 0x000000, 0.85);
+        const bg = this.add.rectangle(centerX, centerY, 520, 300, 0x000000, 0.9);
         bg.setStrokeStyle(2, 0x00ff88);
-        const title = this.add.text(centerX, centerY - 90, `LEVEL UP! Lv.${level}`, {
-            fontSize: '24px', color: '#00ff88', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
+        const title = this.add.text(centerX, centerY - 120, `LEVEL UP! Lv.${level}`, {
+            fontSize: '22px', color: '#00ff88', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
         }).setOrigin(0.5);
 
-        const allOptions = [
-            { label: '攻击 +15%', desc: '属性', color: '#ff6666', action: () => { this.playerManager.addStat(StatType.MAX_HEALTH, 8); } },
-            { label: '射速 +20%', desc: '属性', color: '#ffaa44', action: () => { this.shotCooldown = Math.max(80, this.shotCooldown * 0.8); } },
-            { label: '护盾 +20', desc: '属性', color: '#44aaff', action: () => { this.playerManager.addStat(StatType.MAX_SHIELD, 20); this.playerManager.restoreShield(20); } },
-            { label: '装备强化', desc: '装备', color: '#ffaa00', action: () => { this.enhanceRandomWeapon(); } },
-            { label: '技能冷却-15%', desc: '技能', color: '#cc44ff', action: () => { for (let i = 0; i < 3; i++) this.skillMaxCooldowns[i] *= 0.85; } },
-        ];
+        const allOptions: { label: string; desc: string; color: string; action: () => void }[] = [];
+
+        allOptions.push({ label: '攻击 +15%', desc: '属性', color: '#ff6666', action: () => { this.playerManager.addStat(StatType.MAX_HEALTH, 8); } });
+        allOptions.push({ label: '射速 +20%', desc: '属性', color: '#ffaa44', action: () => { this.shotCooldown = Math.max(80, this.shotCooldown * 0.8); } });
+        allOptions.push({ label: '护盾 +20', desc: '属性', color: '#44aaff', action: () => { this.playerManager.addStat(StatType.MAX_SHIELD, 20); this.playerManager.restoreShield(20); } });
+
+        const slots = [SlotType.HEAD, SlotType.LEFT_HAND, SlotType.RIGHT_HAND, SlotType.TORSO, SlotType.LEGS];
+        const slotIds = ['HEAD', 'LEFT_HAND', 'RIGHT_HAND', 'TORSO', 'LEGS'];
+        for (let si = 0; si < slotIds.length; si++) {
+            const slotId = slotIds[si];
+            const currentId = this.equipEvolutionState.get(slotId) || null;
+            const nextNodes = getNextEquipNodes(currentId, slotId);
+            if (nextNodes.length > 0) {
+                const node = nextNodes[0];
+                allOptions.push({
+                    label: node.name,
+                    desc: `装备·${EquipBranch_label(node.branch)}T${node.tier}`,
+                    color: '#ffaa00',
+                    action: () => { this.equipEvolutionState.set(slotId, node.id); }
+                });
+                break;
+            }
+        }
+
+        for (let sk = 0; sk < 3; sk++) {
+            const currentId = this.skillEvolutionState.get(sk) || null;
+            const nextNodes = getNextSkillNodes(currentId, sk);
+            if (nextNodes.length > 0) {
+                const node = nextNodes[0];
+                allOptions.push({
+                    label: node.name,
+                    desc: `技能·${SkillBranch_label(node.branch)}T${node.tier}`,
+                    color: '#cc44ff',
+                    action: () => { this.skillEvolutionState.set(sk, node.id); this.applySkillEvolution(sk, node); }
+                });
+                break;
+            }
+        }
 
         const optionTexts: Phaser.GameObjects.Text[] = [];
         const optionBoxes: Phaser.GameObjects.Rectangle[] = [];
@@ -1452,15 +1501,15 @@ export class GameScene extends Phaser.Scene {
         allOptions.forEach((opt, i) => {
             const row = Math.floor(i / 3);
             const col = i % 3;
-            const x = centerX - 140 + col * 140;
-            const y = centerY - 30 + row * 55;
+            const x = centerX - 160 + col * 160;
+            const y = centerY - 50 + row * 55;
 
-            const box = this.add.rectangle(x, y, 120, 42, 0x222244, 0.9);
+            const box = this.add.rectangle(x, y, 140, 44, 0x222244, 0.9);
             box.setStrokeStyle(1, 0x444466);
             box.setInteractive({ useHandCursor: true });
 
-            const txt = this.add.text(x, y - 6, opt.label, {
-                fontSize: '13px', color: opt.color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 1
+            const txt = this.add.text(x, y - 7, opt.label, {
+                fontSize: '12px', color: opt.color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 1
             }).setOrigin(0.5);
 
             const descTxt = this.add.text(x, y + 12, `[${opt.desc}]`, {
@@ -1479,12 +1528,16 @@ export class GameScene extends Phaser.Scene {
             optionDescs.push(descTxt);
         });
 
-        this.time.delayedCall(10000, () => {
+        this.time.delayedCall(15000, () => {
             if (bg.active) {
                 allOptions[0].action();
                 this.closeLevelUpUI(bg, title, optionTexts, optionBoxes, optionDescs);
             }
         });
+    }
+
+    private applySkillEvolution(skillIndex: number, node: SkillEvolutionNode): void {
+        this.skillMaxCooldowns[skillIndex] *= node.cooldownMultiplier;
     }
 
     private enhanceRandomWeapon(): void {
