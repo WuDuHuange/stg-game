@@ -141,8 +141,6 @@ export class PauseUI {
         this.isPaused = true;
 
         this.show();
-
-        this.scene.scene.pause();
     }
 
     /**
@@ -151,8 +149,6 @@ export class PauseUI {
     public resume(): void {
         if (!this.isPaused) return;
         this.isPaused = false;
-
-        this.scene.scene.resume();
 
         this.hide();
     }
@@ -163,26 +159,12 @@ export class PauseUI {
     public returnToMenu(): void {
         this.isPaused = false;
         this.hide();
-
-        // 停止当前场景
-        this.scene.scene.stop();
-
-        // 启动主菜单场景
         this.scene.scene.start('MenuScene');
     }
 
-    /**
-     * 退出游戏
-     */
     public quitGame(): void {
         this.isPaused = false;
         this.hide();
-
-        // 停止所有场景
-        this.scene.scene.stop();
-        this.scene.scene.stop('MenuScene');
-
-        // 退出游戏（在Web中无法直接关闭窗口，所以返回主菜单）
         this.scene.scene.start('MenuScene');
     }
 

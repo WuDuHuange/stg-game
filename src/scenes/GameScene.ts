@@ -468,12 +468,32 @@ export class GameScene extends Phaser.Scene {
 
             // 技能效果 - 根据技能类型决定效果
             if (index === 0) {
-                // Q技能 - 主动攻击技能
                 const damage = skill ? skill.getEffect().damage : 50;
-                const shots = Math.ceil(damage / 25); // 伤害越高子弹越多
-                for (let i = 0; i < Math.min(shots, 5); i++) {
-                    this.time.delayedCall(i * 50, () => this.shoot());
-                }
+                this.enemies.getChildren().forEach((enemy: any) => {
+                    if (!enemy.active) return;
+                    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+                    if (dist < 500) {
+                        const newHealth = enemy.getData('health') - damage;
+                        enemy.setData('health', newHealth);
+                        this.particleSystem.createBulletMuzzle(enemy.x, enemy.y);
+                        if (newHealth <= 0) {
+                            const s = enemy.getData('score') || 100;
+                            const exp = enemy.getData('experience') || 10;
+                            this.score += s;
+                            this.killCount++;
+                            this.comboCount++;
+                            if (this.comboCount > this.maxCombo) this.maxCombo = this.comboCount;
+                            this.createExplosion(enemy.x, enemy.y);
+                            this.destroyEnemy(enemy);
+                            this.gainExperience(exp);
+                        } else {
+                            this.showEnemyHealthBar(enemy, newHealth, enemy.getData('maxHealth'));
+                        }
+                    }
+                });
+                this.screenEffects.shakeAndFlash(8, 0x00ffff, 300);
+                const laserBeam = this.add.rectangle(this.player.x, this.player.y / 2, 6, this.player.y - 20, 0x00ffff, 0.6);
+                this.tweens.add({ targets: laserBeam, alpha: 0, duration: 400, onComplete: () => laserBeam.destroy() });
             } else if (index === 1) {
                 // W技能 - 护盾/辅助技能
                 const shieldRestore = skill ? Math.round(skill.getEffect().damage * 0.4) : 20;
@@ -558,23 +578,22 @@ export class GameScene extends Phaser.Scene {
         ];
 
         const instructionTexts: Phaser.GameObjects.Text[] = [];
+        const baseY = this.cameras.main.height - 60;
 
         instructions.forEach((text, index) => {
             const instructionText = this.add.text(
                 this.cameras.main.width / 2,
-                this.cameras.main.height / 2 - 30 + index * 30,
+                baseY + index * 25,
                 text,
                 {
-                    fontSize: '18px',
-                    color: '#ffffff',
-                    fontStyle: 'bold'
+                    fontSize: '14px',
+                    color: '#aaaaaa',
                 }
             ).setOrigin(0.5);
             instructionTexts.push(instructionText);
         });
 
-        // 3秒后隐藏提示
-        this.time.delayedCall(3000, () => {
+        this.time.delayedCall(5000, () => {
             instructionTexts.forEach(text => {
                 if (text && text.active) {
                     this.tweens.add({
@@ -1372,20 +1391,69 @@ export class GameScene extends Phaser.Scene {
         const oldLevel = this.playerManager.getLevel();
         const leveledUp = this.playerManager.addExperience(amount);
 
-        // 检查升级
         if (leveledUp) {
-            // 升级属性提升
             this.playerManager.addStat(StatType.MAX_HEALTH, 10);
-            this.playerManager.heal(this.playerManager.getStats().maxHealth); // 满血
+            this.playerManager.heal(this.playerManager.getStats().maxHealth);
             this.playerManager.addStat(StatType.MAX_SHIELD, 5);
-            this.playerManager.restoreShield(this.playerManager.getStats().maxShield); // 满盾
+            this.playerManager.restoreShield(this.playerManager.getStats().maxShield);
 
-            // 升级特效
             this.particleSystem.createLevelUp(this.player.x, this.player.y);
             audioManager.playProceduralSFX('upgrade');
             this.screenEffects.shakeAndFlash(10, 0x00ff88, 300);
+            this.showLevelUpChoices();
         }
 
+        this.updateHUD();
+    }
+
+    private showLevelUpChoices(): void {
+        this.currentUILayer = UILayerLevel.PAUSE;
+
+        const level = this.playerManager.getLevelData().level;
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        const bg = this.add.rectangle(centerX, centerY, 400, 200, 0x000000, 0.8);
+        bg.setStrokeStyle(2, 0x00ff88);
+        const title = this.add.text(centerX, centerY - 75, `LEVEL UP! Lv.${level}`, {
+            fontSize: '24px', color: '#00ff88', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
+        }).setOrigin(0.5);
+
+        const options = [
+            { label: '攻击 +15%', action: () => { this.playerManager.addStat(StatType.MAX_HEALTH, 5); } },
+            { label: '射速 +20%', action: () => { this.shotCooldown = Math.max(80, this.shotCooldown * 0.8); } },
+            { label: '护盾 +20', action: () => { this.playerManager.addStat(StatType.MAX_SHIELD, 20); this.playerManager.restoreShield(20); } },
+        ];
+
+        const optionTexts: Phaser.GameObjects.Text[] = [];
+        options.forEach((opt, i) => {
+            const txt = this.add.text(centerX - 120 + i * 120, centerY + 10, opt.label, {
+                fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1,
+                backgroundColor: '#333355', padding: { x: 8, y: 6 }
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            txt.on('pointerover', () => txt.setStyle({ color: '#00ff88' }));
+            txt.on('pointerout', () => txt.setStyle({ color: '#ffffff' }));
+            txt.on('pointerdown', () => {
+                opt.action();
+                this.closeLevelUpUI(bg, title, optionTexts);
+            });
+            optionTexts.push(txt);
+        });
+
+        this.time.delayedCall(8000, () => {
+            if (bg.active) {
+                options[0].action();
+                this.closeLevelUpUI(bg, title, optionTexts);
+            }
+        });
+    }
+
+    private closeLevelUpUI(bg: any, title: any, options: any[]): void {
+        if (bg.active) bg.destroy();
+        if (title.active) title.destroy();
+        options.forEach(o => { if (o && o.active) o.destroy(); });
+        this.currentUILayer = UILayerLevel.NONE;
         this.updateHUD();
     }
 
