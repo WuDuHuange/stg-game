@@ -9,6 +9,9 @@ import { SceneManager } from '@game/SceneManager';
 import { SkillManager } from '@game/SkillManager';
 import { SynergySystem } from '@game/SynergySystem';
 import { EnemyAI } from '@game/EnemyAI';
+import { BulletPatternEngine } from '@game/BulletPatternEngine';
+import { STGPlayerSystem } from '@game/STGPlayerSystem';
+import { TextureFactory } from '@game/TextureFactory';
 import { audioManager } from '@systems/AudioManager';
 import { PlayerManager } from '@game/PlayerManager';
 import { WeaponManager } from '@game/WeaponManager';
@@ -17,6 +20,7 @@ import { SlotType, Weapon } from '@data/WeaponData';
 import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
+import { ENEMY_PATTERNS } from '@data/BulletPatterns';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
 import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
 
@@ -106,6 +110,14 @@ export class GameScene extends Phaser.Scene {
     private equipEvolutionState: Map<string, string> = new Map();
     private skillEvolutionState: Map<number, string> = new Map();
 
+    // STG 本核系统
+    private stgPlayer!: STGPlayerSystem;
+    private bulletPatternEngine!: BulletPatternEngine;
+    private hitboxDot!: Phaser.GameObjects.Arc;
+    private shiftKey!: Phaser.Input.Keyboard.Key;
+    private bKey!: Phaser.Input.Keyboard.Key;
+    private pickups!: Phaser.GameObjects.Group;
+
     constructor() {
         super({ key: 'GameScene' });
     }
@@ -151,6 +163,11 @@ export class GameScene extends Phaser.Scene {
         this.bullets = this.add.group();
         this.enemyBullets = this.add.group();
         this.enemies = this.add.group();
+        this.pickups = this.add.group();
+
+        // STG 本核系统
+        this.stgPlayer = new STGPlayerSystem();
+        this.bulletPatternEngine = new BulletPatternEngine(this);
 
         // 创建粒子系统
         this.particleSystem = new ParticleSystem(this);
@@ -251,13 +268,14 @@ export class GameScene extends Phaser.Scene {
      * 创建玩家
      */
     private createPlayer(): void {
-        // 创建玩家精灵（临时使用圆形代替）
-        this.player = this.add.circle(
+        // 创建玩家机体（程序化贴图，可被 assets/textures/player_ship.png 替换）
+        this.player = this.add.image(
             this.cameras.main.width / 2,
             this.cameras.main.height - 100,
-            20,
-            0xe94560
+            TextureFactory.resolve(this, 'player_ship')
         );
+        this.player.setScale(1.05);
+        this.player.setData('tintNormal', 0xffffff);
 
         // 添加玩家光晕效果
         this.playerGlow = this.add.circle(
@@ -267,6 +285,16 @@ export class GameScene extends Phaser.Scene {
             0xe94560,
             0.3
         );
+
+        // STG 判定点（白色小圆，实际碰撞判定只在此点）
+        this.hitboxDot = this.add.circle(
+            this.cameras.main.width / 2,
+            this.cameras.main.height - 100,
+            this.stgPlayer.getHitboxRadius(),
+            0xffffff,
+            1
+        );
+        this.hitboxDot.setDepth(10);
 
         // 设置玩家属性
         this.player.setData('speed', 300);
@@ -287,6 +315,8 @@ export class GameScene extends Phaser.Scene {
         this.qKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
         this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
         this.fKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+        this.shiftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+        this.bKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B);
 
         // ESC键 - 智能导航
         this.escKey.on('down', () => {
@@ -336,6 +366,13 @@ export class GameScene extends Phaser.Scene {
         // F键 - 释放技能3（不与任何功能冲突）
         this.fKey.on('down', () => {
             this.castSkill(2);
+        });
+
+        // B键 - 释放Bomb（全屏清弹+短暂无敌）
+        this.bKey.on('down', () => {
+            if (this.currentUILayer !== UILayerLevel.NONE) return;
+            if (this.gameOver) return;
+            this.useBomb();
         });
     }
 
@@ -637,6 +674,11 @@ export class GameScene extends Phaser.Scene {
         this.hudUI.updateLevel(levelData.level, levelData.experience, levelData.experienceToNextLevel);
         this.hudUI.updateCombo(this.comboCount);
 
+        // 更新STG本核状态（残机/Bomb/Power/擦弹）
+        if (this.stgPlayer) {
+            this.hudUI.updateSTG(this.stgPlayer.getState());
+        }
+
         // 更新协同效果显示
         const activeSynergies = this.synergySystem.getActiveSynergies();
         this.hudUI.updateSynergies(activeSynergies.map(s => s.synergyId));
@@ -651,6 +693,10 @@ export class GameScene extends Phaser.Scene {
 
         if (!this.player || !this.player.active) return;
 
+        // 更新STG规则（无敌/Bomb计时）与Focus状态
+        this.stgPlayer.update(this.game.loop.delta);
+        this.stgPlayer.setFocus(this.shiftKey.isDown);
+
         // 更新技能冷却显示
         this.updateSkillCooldowns();
 
@@ -660,7 +706,7 @@ export class GameScene extends Phaser.Scene {
         // 更新连击显示
         this.hudUI.updateCombo(this.comboCount);
 
-        const speed = this.player.getData('speed');
+        const speed = this.player.getData('speed') * (this.stgPlayer.isFocus() ? 0.4 : 1);
         let velocityX = 0;
         let velocityY = 0;
 
@@ -691,6 +737,13 @@ export class GameScene extends Phaser.Scene {
         if (this.playerGlow && this.playerGlow.active) {
             this.playerGlow.x = this.player.x;
             this.playerGlow.y = this.player.y;
+        }
+
+        // 更新STG判定点位置，Focus 时高亮
+        if (this.hitboxDot && this.hitboxDot.active) {
+            this.hitboxDot.x = this.player.x;
+            this.hitboxDot.y = this.player.y;
+            this.hitboxDot.setAlpha(this.stgPlayer.isFocus() ? 1 : 0.55);
         }
 
         // 限制玩家在屏幕内
@@ -727,6 +780,9 @@ export class GameScene extends Phaser.Scene {
         this.updateEnemyBullets();
         this.checkEnemyBulletCollisions();
 
+        // 更新道具与拾取
+        this.updatePickups();
+
         // 护盾缓慢恢复
         const stats = this.playerManager.getStats();
         if (stats.shield < stats.maxShield) {
@@ -751,20 +807,48 @@ export class GameScene extends Phaser.Scene {
      * 射击
      */
     private shoot(): void {
-        const bullet = this.add.circle(
-            this.player.x,
-            this.player.y - 20,
-            5,
-            0x00ff00
-        );
-
         const level = this.playerManager.getLevelData().level;
-        const baseDamage = 10 + (level - 1) * 2;
+        const power = this.stgPlayer.getPower();
+        const baseDamage = 10 + (level - 1) * 2 + power * 2;
 
-        bullet.setData('speed', 500);
-        bullet.setData('damage', baseDamage);
+        // Power 决定弹道数量与角度（0-1 单发，2-3 三路，4-5 五路+子机）
+        let angles: number[] = [0];
+        if (power >= 4) {
+            angles = [-0.32, -0.16, 0, 0.16, 0.32];
+        } else if (power >= 2) {
+            angles = [-0.22, 0, 0.22];
+        }
 
-        this.bullets.add(bullet);
+        for (const a of angles) {
+            const bullet = this.add.image(
+                this.player.x,
+                this.player.y - 20,
+                TextureFactory.resolve(this, 'bullet_player')
+            );
+            bullet.setScale(power >= 4 ? 0.9 : 0.8);
+            bullet.setTint(power >= 4 ? 0x00ffaa : 0x00ffff);
+            bullet.setData('speed', 500);
+            bullet.setData('damage', baseDamage);
+            bullet.setData('angle', a);
+            this.bullets.add(bullet);
+        }
+
+        // Power 满级时两侧子机
+        if (power >= 5) {
+            for (const side of [-1, 1]) {
+                const option = this.add.image(
+                    this.player.x + side * 22,
+                    this.player.y - 8,
+                    TextureFactory.resolve(this, 'bullet_player')
+                );
+                option.setScale(0.6);
+                option.setTint(0x00ffcc);
+                option.setData('speed', 500);
+                option.setData('damage', Math.round(baseDamage * 0.7));
+                option.setData('angle', -side * 0.12);
+                this.bullets.add(option);
+            }
+        }
 
         this.particleSystem.createBulletMuzzle(this.player.x, this.player.y - 20);
         audioManager.playProceduralSFX('shoot');
@@ -776,10 +860,12 @@ export class GameScene extends Phaser.Scene {
     private updateBullets(): void {
         this.bullets.getChildren().forEach((bullet: any) => {
             const speed = bullet.getData('speed');
-            bullet.y -= speed * this.game.loop.delta / 1000;
+            const angle = bullet.getData('angle') || 0;
+            bullet.x += Math.sin(angle) * speed * this.game.loop.delta / 1000;
+            bullet.y -= Math.cos(angle) * speed * this.game.loop.delta / 1000;
 
             // 移除超出屏幕的子弹
-            if (bullet.y < -10) {
+            if (bullet.y < -10 || bullet.x < -20 || bullet.x > this.cameras.main.width + 20) {
                 bullet.destroy();
             }
         });
@@ -818,76 +904,47 @@ export class GameScene extends Phaser.Scene {
 
             // 检查射击间隔
             const lastFire = enemy.getData('lastFireTime') || 0;
-            const fireRate = isBoss ? 1500 : 3000; // Boss射速快
+            const fireRate = isBoss ? 1200 : (enemy.getData('fireRate') || 3000);
             if (now - lastFire < fireRate) return;
 
             enemy.setData('lastFireTime', now);
 
-            // 根据敌人ID决定弹幕模式
+            // Boss 走多阶段弹幕，普通敌人按配置谱面发射
             if (isBoss) {
                 this.fireBossBullets(enemy);
-            } else if (enemyId.startsWith('heavy')) {
-                this.fireSpreadBullets(enemy, 3, 150);
-            } else if (enemyId.startsWith('elite')) {
-                this.fireSpreadBullets(enemy, 5, 120);
             } else {
-                this.fireSingleBullet(enemy, 180);
+                const patternId = ENEMY_PATTERNS[enemyId] || 'aimed_slow';
+                const rotation = enemy.getData('patternRotation') || 0;
+                this.bulletPatternEngine.fire(
+                    this.enemyBullets,
+                    enemy.x,
+                    enemy.y + 10,
+                    patternId,
+                    this.player.x,
+                    this.player.y,
+                    rotation
+                );
             }
         });
-    }
-
-    /**
-     * 敌人发射单发子弹
-     */
-    private fireSingleBullet(enemy: any, speed: number): void {
-        const bullet = this.add.circle(enemy.x, enemy.y + 10, 4, 0xff6600);
-        const glow = this.add.circle(enemy.x, enemy.y + 10, 8, 0xff6600, 0.3);
-        bullet.setData('velocityX', Math.cos(Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y)) * speed);
-        bullet.setData('velocityY', Math.sin(Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y)) * speed);
-        bullet.setData('damage', 8);
-        bullet.setData('glow', glow);
-        this.enemyBullets.add(bullet);
-    }
-
-    /**
-     * 敌人发射扇形弹幕
-     */
-    private fireSpreadBullets(enemy: any, count: number, speed: number): void {
-        const baseAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-        const spreadAngle = Math.PI / 6;
-
-        for (let i = 0; i < count; i++) {
-            const angle = baseAngle + (i - (count - 1) / 2) * (spreadAngle / count * 2);
-            const bullet = this.add.circle(enemy.x, enemy.y + 10, 3, 0xff8800);
-            const glow = this.add.circle(enemy.x, enemy.y + 10, 7, 0xff8800, 0.3);
-            bullet.setData('velocityX', Math.cos(angle) * speed);
-            bullet.setData('velocityY', Math.sin(angle) * speed);
-            bullet.setData('damage', 10);
-            bullet.setData('glow', glow);
-            this.enemyBullets.add(bullet);
-        }
     }
 
     /**
      * Boss发射弹幕（圆形+螺旋混合）
      */
     private fireBossBullets(enemy: any): void {
-        const bulletCount = 8;
-        const speed = 140;
         const healthPercent = (enemy.getData('health') || 1) / (enemy.getData('maxHealth') || 1);
 
-        const actualCount = healthPercent < 0.3 ? bulletCount * 2 : bulletCount;
-        const time = this.time.now / 1000;
-
-        for (let i = 0; i < actualCount; i++) {
-            const angle = (i / actualCount) * Math.PI * 2 + time * 2;
-            const bullet = this.add.circle(enemy.x, enemy.y, 5, 0xff4400);
-            const glow = this.add.circle(enemy.x, enemy.y, 10, 0xff4400, 0.3);
-            bullet.setData('velocityX', Math.cos(angle) * speed);
-            bullet.setData('velocityY', Math.sin(angle) * speed);
-            bullet.setData('damage', 15);
-            bullet.setData('glow', glow);
-            this.enemyBullets.add(bullet);
+        if (healthPercent < 0.35) {
+            // 第三阶段：螺旋 + 圆环
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y);
+        } else if (healthPercent < 0.7) {
+            // 第二阶段：圆环 + 指向快弹
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'aimed_fast', this.player.x, this.player.y);
+        } else {
+            // 第一阶段：螺旋
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y);
         }
     }
 
@@ -899,10 +956,8 @@ export class GameScene extends Phaser.Scene {
         const shouldTrail = this.trailFrameCounter % 3 === 0;
 
         this.enemyBullets.getChildren().forEach((bullet: any) => {
-            const vx = bullet.getData('velocityX') || 0;
-            const vy = bullet.getData('velocityY') || 100;
-            bullet.x += vx * this.game.loop.delta / 1000;
-            bullet.y += vy * this.game.loop.delta / 1000;
+            // 由弹幕引擎处理运动（含正弦/加速等曲线）
+            this.bulletPatternEngine.updateBullet(bullet, this.game.loop.delta);
 
             const glow = bullet.getData('glow');
             if (glow && glow.active) {
@@ -910,8 +965,8 @@ export class GameScene extends Phaser.Scene {
                 glow.y = bullet.y;
             }
 
-            if (shouldTrail && bullet.active) {
-                const color = bullet.fillColor || 0xff6600;
+            if (shouldTrail && bullet.active && !bullet.getData('isLaser')) {
+                const color = typeof bullet.fillColor === 'number' ? bullet.fillColor : 0xff6600;
                 this.particleSystem.createEnemyBulletTrail(bullet.x, bullet.y, color);
             }
 
@@ -929,7 +984,11 @@ export class GameScene extends Phaser.Scene {
      * 检查敌人子弹与玩家的碰撞
      */
     private checkEnemyBulletCollisions(): void {
-        if (this.gameOver || this.playerInvincible) return;
+        if (this.gameOver) return;
+
+        const hitRadius = this.stgPlayer.getHitboxRadius();
+        const grazeRadius = hitRadius + 14;
+        const invincible = this.stgPlayer.isInvincible();
 
         this.enemyBullets.getChildren().forEach((bullet: any) => {
             if (!bullet.active) return;
@@ -939,7 +998,16 @@ export class GameScene extends Phaser.Scene {
                 bullet.x, bullet.y
             );
 
-            if (distance < 20) {
+            // 擦弹：进入判定圈但未命中（一次计数）
+            if (!bullet.getData('grazed') && !invincible && distance < grazeRadius && distance > hitRadius) {
+                bullet.setData('grazed', true);
+                this.stgPlayer.addGraze(1);
+                audioManager.playProceduralSFX('combo');
+                this.particleSystem.createHitFlash(this.player.x, this.player.y, 0xffd700);
+            }
+
+            // 命中：判定点接触
+            if (distance <= hitRadius) {
                 const damage = bullet.getData('damage') || 8;
                 const glow = bullet.getData('glow');
                 if (glow && glow.active) glow.destroy();
@@ -1087,7 +1155,17 @@ export class GameScene extends Phaser.Scene {
         const enemyScore = config ? config.score : (isBoss ? 500 : 100);
         const enemyExp = config ? config.experience : 10;
 
-        const enemy = this.add.circle(x, y, enemyRadius, enemyColor);
+        // 生成敌人 - 按敌机类型使用对应的程序化/替换贴图
+        const enemyTypeKey = isBoss
+            ? 'enemy_boss'
+            : enemyId.startsWith('heavy')
+                ? 'enemy_heavy'
+                : enemyId.startsWith('elite')
+                    ? 'enemy_elite'
+                    : 'enemy_light';
+
+        const enemy = this.add.image(x, y, TextureFactory.resolve(this, enemyTypeKey));
+        enemy.setScale((enemyRadius * 2) / 56);
         enemy.setData('speed', enemySpeed);
         enemy.setData('health', enemyHealth);
         enemy.setData('maxHealth', enemyHealth);
@@ -1096,6 +1174,7 @@ export class GameScene extends Phaser.Scene {
         enemy.setData('experience', enemyExp);
         enemy.setData('isBoss', isBoss);
         enemy.setData('enemyId', enemyId);
+        enemy.setData('radius', enemyRadius);
 
         // 添加敌人光晕 - 关联到enemy以便销毁时清理
         const glow = this.add.circle(x, y, enemyRadius + 10, enemyColor, 0.3);
@@ -1374,18 +1453,25 @@ export class GameScene extends Phaser.Scene {
                 // 销毁敌人及光晕
                 this.destroyEnemy(enemy);
 
+                // 掉落道具（Boss 掉多份）
+                const isBoss = enemy.getData('isBoss') || false;
+                const dropCount = isBoss ? 4 : 1;
+                for (let i = 0; i < dropCount; i++) {
+                    this.spawnPickup(enemy.x, enemy.y);
+                }
+
                 // 获取经验值
                 this.gainExperience(experience);
             } else {
                 enemy.setData('health', newHealth);
                 this.showEnemyHealthBar(enemy, newHealth, enemy.getData('maxHealth'));
 
-                const originalColor = enemy.fillColor;
-                enemy.setFillStyle(0xffffff);
+                const originalColor = enemy.tint;
+                enemy.setTintFill(0xffffff);
 
                 this.time.delayedCall(100, () => {
                     if (enemy.active) {
-                        enemy.setFillStyle(originalColor);
+                        enemy.setTint(originalColor);
                     }
                 });
             }
@@ -1566,10 +1652,16 @@ export class GameScene extends Phaser.Scene {
      * 玩家受到伤害
      */
     private playerTakeDamage(damage: number): void {
-        if (this.playerInvincible || this.gameOver) return;
+        if (this.gameOver) return;
 
-        // 委托给PlayerManager处理（先扣护盾再扣血量，考虑防御）
-        this.playerManager.takeDamage(damage);
+        // STG 规则：残机制扣命，血条制(Easy)扣血量
+        const dead = this.stgPlayer.onHit(damage);
+        if (!this.stgPlayer.isInvincible()) return;
+
+        // 同步 PlayerManager（护盾/血量显示用）
+        if (this.stgPlayer.isHealthMode()) {
+            this.playerManager.takeDamage(damage);
+        }
 
         // 更新HUD
         this.updateHUD();
@@ -1581,26 +1673,142 @@ export class GameScene extends Phaser.Scene {
         audioManager.playProceduralSFX('hit');
 
         // 闪烁效果
-        const originalColor = this.player.fillColor;
-        this.player.setFillStyle(0xff0000);
-        this.playerInvincible = true;
+        const originalColor = this.player.getData('tintNormal') || this.player.tint;
+        this.player.setTintFill(0xff5555);
+        this.player.setAlpha(0.5);
 
         this.time.delayedCall(100, () => {
             if (this.player && this.player.active) {
-                this.player.setFillStyle(originalColor);
+                this.player.setTint(originalColor);
+                this.player.setAlpha(1);
             }
         });
 
-        // 1秒无敌时间
-        this.time.delayedCall(1000, () => {
-            this.playerInvincible = false;
-        });
-
-        // 检查游戏结束
-        if (!this.playerManager.isAlive()) {
+        // 检查游戏结束（残机耗尽 或 血条制血量归零）
+        const healthDead = this.stgPlayer.isHealthMode() && !this.playerManager.isAlive();
+        if (dead || healthDead) {
             this.gameOver = true;
             this.handleGameOver();
         }
+    }
+
+    /**
+     * 释放Bomb：全屏清弹 + 全屏伤害 + 短时无敌
+     */
+    private useBomb(): void {
+        if (!this.stgPlayer.useBomb()) return;
+
+        // 全屏清除敌弹
+        this.enemyBullets.getChildren().forEach((bullet: any) => {
+            const glow = bullet.getData('glow');
+            if (glow && glow.active) glow.destroy();
+            bullet.destroy();
+        });
+
+        // 全屏伤害
+        this.enemies.getChildren().forEach((enemy: any) => {
+            if (!enemy.active) return;
+            const newHealth = (enemy.getData('health') || 0) - 300;
+            enemy.setData('health', newHealth);
+            if (newHealth <= 0) {
+                const score = enemy.getData('score') || 100;
+                const experience = enemy.getData('experience') || 10;
+                this.score += score;
+                this.killCount++;
+                this.comboCount++;
+                if (this.comboCount > this.maxCombo) this.maxCombo = this.comboCount;
+                this.showFloatingScore(enemy.x, enemy.y, score, 1);
+                this.createExplosion(enemy.x, enemy.y);
+                this.destroyEnemy(enemy);
+                this.gainExperience(experience);
+            } else {
+                this.showEnemyHealthBar(enemy, newHealth, enemy.getData('maxHealth'));
+            }
+        });
+
+        // 特效与音效
+        this.screenEffects.shakeAndFlash(20, 0xffffff, 800);
+        audioManager.playProceduralSFX('explosion');
+        this.particleSystem.createSkillCast(this.player.x, this.player.y, 0xffffff);
+
+        this.updateHUD();
+    }
+
+    /**
+     * 敌人死亡掉落道具
+     */
+    private spawnPickup(x: number, y: number): void {
+        if (this.gameOver) return;
+
+        const roll = Math.random();
+        let type: 'power' | 'bomb' | 'life' | 'score';
+        if (roll < 0.55) {
+            type = 'power';
+        } else if (roll < 0.7) {
+            type = 'bomb';
+        } else if (roll < 0.75) {
+            type = 'life';
+        } else {
+            type = 'score';
+        }
+
+        const pickup = this.add.image(x, y, TextureFactory.resolve(this, `pickup_${type}`));
+        pickup.setScale(0.8);
+        pickup.setData('pickupType', type);
+        pickup.setData('vy', 60);
+        this.pickups.add(pickup);
+    }
+
+    /**
+     * 更新道具运动与磁吸拾取
+     */
+    private updatePickups(): void {
+        const px = this.player.x;
+        const py = this.player.y;
+        const magnetRadius = 55;
+
+        this.pickups.getChildren().forEach((p: any) => {
+            if (!p.active) return;
+
+            // 缓慢下落
+            p.y += (p.getData('vy') || 60) * this.game.loop.delta / 1000;
+
+            // 磁吸
+            const dist = Phaser.Math.Distance.Between(px, py, p.x, p.y);
+            if (dist < magnetRadius) {
+                p.x += (px - p.x) * 0.18;
+                p.y += (py - p.y) * 0.18;
+            }
+
+            if (dist < 24) {
+                this.collectPickup(p);
+            } else if (p.y > this.cameras.main.height + 30) {
+                p.destroy();
+            }
+        });
+    }
+
+    private collectPickup(p: any): void {
+        const type = p.getData('pickupType');
+        switch (type) {
+            case 'power':
+                this.stgPlayer.addPower(1);
+                break;
+            case 'bomb':
+                this.stgPlayer.addBomb(1);
+                break;
+            case 'life':
+                this.stgPlayer.addLife(1);
+                break;
+            case 'score':
+            default:
+                this.score += 500;
+                this.showFloatingScore(p.x, p.y, 500, 1);
+                break;
+        }
+        this.particleSystem.createHitFlash(p.x, p.y, 0xffffff);
+        p.destroy();
+        this.updateHUD();
     }
 
     /**
@@ -1670,7 +1878,7 @@ export class GameScene extends Phaser.Scene {
             enemy.setData('healthBar', healthBar);
         }
 
-        const radius = enemy.radius || 15;
+        const radius = enemy.getData('radius') || 15;
         healthBar.x = enemy.x - 15;
         healthBar.y = enemy.y - radius - 6;
         const percent = maxHealth > 0 ? Math.max(0, health / maxHealth) : 0;

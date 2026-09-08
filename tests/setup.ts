@@ -2,13 +2,11 @@
  * 测试环境设置
  */
 
-import { expect, afterEach } from 'vitest';
-import { cleanup } from '@testing-library/dom';
+import { afterEach } from 'vitest';
 
-// 清理DOM
+// 每个用例后清理DOM，保持测试环境隔离
 afterEach(() => {
-    cleanup();
+    if (typeof document !== 'undefined' && document.body) {
+        document.body.innerHTML = '';
+    }
 });
-
-// 扩展expect
-expect.extend({});

@@ -3,6 +3,8 @@
  */
 
 import Phaser from 'phaser';
+import { TextureFactory } from '@game/TextureFactory';
+import { TEXTURE_ASSETS } from '@data/AssetManifest';
 
 export class BootScene extends Phaser.Scene {
     constructor() {
@@ -15,7 +17,12 @@ export class BootScene extends Phaser.Scene {
     preload(): void {
         this.createLoadingBar();
 
-        // 代码生成必要纹理（不依赖外部资源文件）
+        // 尝试加载外部美术资源（缺失则静默失败，由程序化纹理兜底）
+        for (const spec of TEXTURE_ASSETS) {
+            this.load.image(spec.key, spec.path);
+        }
+
+        // 代码生成兜底纹理与基础纹理（不依赖外部资源文件）
         this.generateTextures();
     }
 
@@ -23,6 +30,9 @@ export class BootScene extends Phaser.Scene {
      * 生成必要的纹理资源
      */
     private generateTextures(): void {
+        // 生成全部程序化兜底美术（用户替换 png 后此处自动让位）
+        TextureFactory.ensure(this);
+
         // 玩境光点纹理
         if (!this.textures.exists('ambient_dot')) {
             const g = this.add.graphics();

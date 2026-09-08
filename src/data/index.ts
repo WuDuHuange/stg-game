@@ -104,3 +104,18 @@ export {
     getSkillEvolutionNode,
     getNextSkillNodes
 } from './SkillEvolution';
+
+export {
+    AssetSpec,
+    TEXTURE_ASSETS,
+    getAssetSpec
+} from './AssetManifest';
+
+export {
+    BulletCurveType,
+    BulletCurveConfig,
+    BulletPatternKind,
+    BulletPatternConfig,
+    PATTERNS,
+    ENEMY_PATTERNS
+} from './BulletPatterns';

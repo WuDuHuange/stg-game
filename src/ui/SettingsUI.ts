@@ -75,7 +75,7 @@ export class SettingsUI {
      * 创建设置界面
      */
     private createSettingsInterface(): void {
-        // 背景
+        // 背景（先创建，稍后先入容器，确保置于最底层）
         const bg = this.scene.add.rectangle(
             this.scene.cameras.main.width / 2,
             this.scene.cameras.main.height / 2,
@@ -121,8 +121,11 @@ export class SettingsUI {
             this.hide();
         });
 
-        // 添加到容器
-        this.container.add([bg, title, closeButton]);
+        // 依次添加到容器，顺序决定渲染层级（先添加的在底层）：
+        // bg 先入容器垫底，标签页与内容在 createTabs/createContent 中加入，
+        // 最后添加 title 与 closeButton 保证可见。
+        this.container.add(bg);
+        this.container.add([title, closeButton]);
     }
 
     /**

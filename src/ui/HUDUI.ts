@@ -37,6 +37,9 @@ export class HUDUI {
     // 连击
     private comboText!: Phaser.GameObjects.Text;
 
+    // STG 本核状态（残机/Bomb/Power/擦弹）
+    private stgText!: Phaser.GameObjects.Text;
+
     // 关卡信息
     private levelInfoText!: Phaser.GameObjects.Text;
 
@@ -76,6 +79,7 @@ export class HUDUI {
         this.createScoreDisplay();
         this.createLevelDisplay();
         this.createComboDisplay();
+        this.createSTGDisplay();
         this.createSynergyDisplay();
         this.createLevelProgress();
         this.createLevelInfo();
@@ -282,6 +286,35 @@ export class HUDUI {
         );
 
         this.container.add(this.comboText);
+    }
+
+    /**
+     * 创建 STG 本核状态显示（残机/Bomb/Power/擦弹）
+     */
+    private createSTGDisplay(): void {
+        this.stgText = this.scene.add.text(10, 62, '', {
+            fontSize: '13px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2,
+            lineSpacing: 4
+        });
+        this.container.add(this.stgText);
+    }
+
+    /**
+     * 更新 STG 本核状态显示
+     */
+    public updateSTG(st: { lives: number; bombs: number; power: number; graze: number; useHealthMode: boolean }): void {
+        const lives = '♥'.repeat(Math.max(0, st.lives));
+        const bombs = '♦'.repeat(Math.max(0, st.bombs));
+        const powerBar = '★'.repeat(st.power) + '☆'.repeat(Math.max(0, 5 - st.power));
+        this.stgText.setText(
+            `残机 ${lives || '--'}\n` +
+            `Bomb ${bombs || '--'}  ${powerBar}\n` +
+            `擦弹 ${st.graze}`
+        );
     }
 
     /**
