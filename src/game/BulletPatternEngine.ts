@@ -68,7 +68,8 @@ export class BulletPatternEngine {
         pattern: BulletPatternConfig | string,
         playerX?: number,
         playerY?: number,
-        rotation: number = 0
+        rotation: number = 0,
+        speedMult: number = 1
     ): void {
         const cfg = this.getPattern(pattern);
         this.ensureTextures();
@@ -82,7 +83,7 @@ export class BulletPatternEngine {
             return;
         }
 
-        const speed = cfg.speed;
+        const speed = cfg.speed * speedMult;
         const px = playerX ?? emitterX;
         const py = playerY ?? emitterY;
 

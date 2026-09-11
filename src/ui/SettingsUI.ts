@@ -2,6 +2,8 @@
  * 设置UI类
  * 负责显示设置界面，支持图形、音频、控制等设置
  */
+import { DIFFICULTIES, DIFFICULTY_ORDER, getStoredDifficulty, setStoredDifficulty } from '@data/Difficulty';
+
 export class SettingsUI {
     private scene: Phaser.Scene;
     private container!: Phaser.GameObjects.Container;
@@ -195,6 +197,14 @@ export class SettingsUI {
         );
         content.setName('graphics-content');
         content.setVisible(false);
+
+        // 难度设置（Easy 血条制降级，Normal+ 残机制，影响弹幕/血量缩放）
+        const difficultyLabels = DIFFICULTY_ORDER.map(d => DIFFICULTIES[d].name);
+        const currentDifficulty = getStoredDifficulty();
+        const currentDifficultyIndex = Math.max(0, DIFFICULTY_ORDER.indexOf(currentDifficulty.id));
+        this.createSettingOption(content, -120, '难度', difficultyLabels, currentDifficultyIndex, (value) => {
+            setStoredDifficulty(DIFFICULTY_ORDER[value]);
+        });
 
         // 画质设置
         this.createSettingOption(content, -50, '画质', ['低', '中', '高'], this.settings.graphics.quality, (value) => {

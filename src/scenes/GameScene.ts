@@ -21,6 +21,7 @@ import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
 import { ENEMY_PATTERNS } from '@data/BulletPatterns';
+import { getStoredDifficulty, DifficultyConfig } from '@data/Difficulty';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
 import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
 
@@ -47,7 +48,7 @@ enum UILayerLevel {
 }
 
 export class GameScene extends Phaser.Scene {
-    private player!: Phaser.GameObjects.Arc;
+    private player!: Phaser.GameObjects.Image;
     private playerGlow!: Phaser.GameObjects.Arc;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: any;
@@ -117,6 +118,7 @@ export class GameScene extends Phaser.Scene {
     private shiftKey!: Phaser.Input.Keyboard.Key;
     private bKey!: Phaser.Input.Keyboard.Key;
     private pickups!: Phaser.GameObjects.Group;
+    private difficulty: DifficultyConfig = getStoredDifficulty();
 
     constructor() {
         super({ key: 'GameScene' });
@@ -166,7 +168,11 @@ export class GameScene extends Phaser.Scene {
         this.pickups = this.add.group();
 
         // STG 本核系统
-        this.stgPlayer = new STGPlayerSystem();
+        this.stgPlayer = new STGPlayerSystem({
+            useHealthMode: this.difficulty.useHealthMode,
+            lives: this.difficulty.lives,
+            health: this.difficulty.health
+        });
         this.bulletPatternEngine = new BulletPatternEngine(this);
 
         // 创建粒子系统
@@ -668,7 +674,12 @@ export class GameScene extends Phaser.Scene {
     private updateHUD(): void {
         const stats = this.playerManager.getStats();
         const levelData = this.playerManager.getLevelData();
-        this.hudUI.updateHealth(stats.health, stats.maxHealth);
+        if (this.stgPlayer && this.stgPlayer.isHealthMode()) {
+            // Easy 血条制：用 STG 血量
+            this.hudUI.updateHealth(this.stgPlayer.getHealth(), this.stgPlayer.getMaxHealth());
+        } else {
+            this.hudUI.updateHealth(stats.health, stats.maxHealth);
+        }
         this.hudUI.updateShield(stats.shield, stats.maxShield);
         this.hudUI.updateScore(this.score);
         this.hudUI.updateLevel(levelData.level, levelData.experience, levelData.experienceToNextLevel);
@@ -904,7 +915,7 @@ export class GameScene extends Phaser.Scene {
 
             // 检查射击间隔
             const lastFire = enemy.getData('lastFireTime') || 0;
-            const fireRate = isBoss ? 1200 : (enemy.getData('fireRate') || 3000);
+            const fireRate = (isBoss ? 1200 : (enemy.getData('fireRate') || 3000)) * this.difficulty.enemyFireRateMult;
             if (now - lastFire < fireRate) return;
 
             enemy.setData('lastFireTime', now);
@@ -922,7 +933,8 @@ export class GameScene extends Phaser.Scene {
                     patternId,
                     this.player.x,
                     this.player.y,
-                    rotation
+                    rotation,
+                    this.difficulty.bulletSpeedMult
                 );
             }
         });
@@ -936,15 +948,15 @@ export class GameScene extends Phaser.Scene {
 
         if (healthPercent < 0.35) {
             // 第三阶段：螺旋 + 圆环
-            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y);
-            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y, 0, this.difficulty.bulletSpeedMult);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y, 0, this.difficulty.bulletSpeedMult);
         } else if (healthPercent < 0.7) {
             // 第二阶段：圆环 + 指向快弹
-            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y);
-            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'aimed_fast', this.player.x, this.player.y);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_ring', this.player.x, this.player.y, 0, this.difficulty.bulletSpeedMult);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'aimed_fast', this.player.x, this.player.y, 0, this.difficulty.bulletSpeedMult);
         } else {
             // 第一阶段：螺旋
-            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y);
+            this.bulletPatternEngine.fire(this.enemyBullets, enemy.x, enemy.y, 'boss_spiral', this.player.x, this.player.y, 0, this.difficulty.bulletSpeedMult);
         }
     }
 
@@ -1149,7 +1161,7 @@ export class GameScene extends Phaser.Scene {
         const config = getEnemyConfig(enemyId);
         const enemyRadius = config ? config.radius : (isBoss ? 30 : 15);
         const enemyColor = config ? config.color : (isBoss ? 0xff4400 : 0xff0000);
-        const enemyHealth = config ? config.health : (isBoss ? 200 : 20);
+        const enemyHealth = (config ? config.health : (isBoss ? 200 : 20)) * this.difficulty.enemyHealthMult;
         const enemyDamage = config ? config.damage : 10;
         const enemySpeed = config ? config.speed : Phaser.Math.Between(50, 150);
         const enemyScore = config ? config.score : (isBoss ? 500 : 100);
@@ -1426,7 +1438,7 @@ export class GameScene extends Phaser.Scene {
                     this.maxCombo = this.comboCount;
                 }
                 const comboMultiplier = 1 + (this.comboCount - 1) * 0.1;
-                const earnedScore = Math.floor(score * comboMultiplier);
+                const earnedScore = Math.floor(score * comboMultiplier * this.difficulty.scoreMult);
                 this.score += earnedScore;
                 this.killCount++;
                 this.showFloatingScore(enemy.x, enemy.y, earnedScore, comboMultiplier);
@@ -1713,7 +1725,7 @@ export class GameScene extends Phaser.Scene {
             if (newHealth <= 0) {
                 const score = enemy.getData('score') || 100;
                 const experience = enemy.getData('experience') || 10;
-                this.score += score;
+                this.score += Math.round(score * this.difficulty.scoreMult);
                 this.killCount++;
                 this.comboCount++;
                 if (this.comboCount > this.maxCombo) this.maxCombo = this.comboCount;
@@ -1967,6 +1979,9 @@ export class GameScene extends Phaser.Scene {
         }
         if (this.enemies) {
             this.enemies.clear(true, true);
+        }
+        if (this.pickups) {
+            this.pickups.clear(true, true);
         }
 
         super.destroy();

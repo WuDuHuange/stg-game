@@ -112,6 +112,16 @@ export {
 } from './AssetManifest';
 
 export {
+    Difficulty,
+    DifficultyConfig,
+    DIFFICULTIES,
+    DIFFICULTY_ORDER,
+    getDifficulty,
+    getStoredDifficulty,
+    setStoredDifficulty
+} from './Difficulty';
+
+export {
     BulletCurveType,
     BulletCurveConfig,
     BulletPatternKind,

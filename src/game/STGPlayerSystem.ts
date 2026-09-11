@@ -38,12 +38,20 @@ export class STGPlayerSystem {
     private health: number = 100;
     private maxHealth: number = 100;
 
-    constructor(options?: { useHealthMode?: boolean; hitboxRadius?: number }) {
+    constructor(options?: { useHealthMode?: boolean; hitboxRadius?: number; lives?: number; health?: number; bombs?: number }) {
         if (options) {
             this.useHealthMode = options.useHealthMode ?? false;
             this.hitboxRadius = options.hitboxRadius ?? DEFAULT_HITBOX_RADIUS;
         }
         this.reset();
+        if (options) {
+            if (options.lives !== undefined) this.lives = options.lives;
+            if (options.health !== undefined) {
+                this.health = options.health;
+                this.maxHealth = options.health;
+            }
+            if (options.bombs !== undefined) this.bombs = options.bombs;
+        }
     }
 
     public reset(): void {

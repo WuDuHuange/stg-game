@@ -40,7 +40,7 @@ export class TextureFactory {
         return `proc_${key}`;
     }
 
-    private static finish(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, fallbackKey: string): void {
+    private static finish(_scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, fallbackKey: string): void {
         g.generateTexture(fallbackKey, CANVAS, CANVAS);
         g.destroy();
     }
