@@ -19,7 +19,7 @@ import { WeaponLoader } from '@data/WeaponLoader';
 import { SlotType, Weapon } from '@data/WeaponData';
 import { StatType } from '@data/PlayerData';
 import { SkillType } from '@data/SkillData';
-import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, LevelConfig, WaveConfig } from '@data/LevelConfigs';
+import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, getAllLevels, LevelConfig, WaveConfig } from '@data/LevelConfigs';
 import { ENEMY_PATTERNS } from '@data/BulletPatterns';
 import { getStoredDifficulty, DifficultyConfig } from '@data/Difficulty';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
@@ -119,6 +119,7 @@ export class GameScene extends Phaser.Scene {
     private bKey!: Phaser.Input.Keyboard.Key;
     private pickups!: Phaser.GameObjects.Group;
     private difficulty: DifficultyConfig = getStoredDifficulty();
+    private currentBoss: any = null;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -190,6 +191,7 @@ export class GameScene extends Phaser.Scene {
         // 创建HUD UI
         this.hudUI = new HUDUI(this);
         this.hudUI.initialize();
+        this.hudUI.initLevelProgress(getAllLevels().length);
 
         // 创建装备UI
         this.equipmentUI = new EquipmentUI(this);
@@ -794,11 +796,50 @@ export class GameScene extends Phaser.Scene {
         // 更新道具与拾取
         this.updatePickups();
 
+        // 更新Boss战斗状态（血条/阶段宣言/机动）
+        this.updateBossUI();
+
         // 护盾缓慢恢复
         const stats = this.playerManager.getStats();
         if (stats.shield < stats.maxShield) {
             this.playerManager.restoreShield(0.02);
             this.hudUI.updateShield(this.playerManager.getStats().shield, stats.maxShield);
+        }
+    }
+
+    /**
+     * 更新 Boss 战斗状态：血条、阶段符卡宣言、正弦机动
+     */
+    private updateBossUI(): void {
+        if (this.currentBoss && this.currentBoss.active) {
+            const hp = this.currentBoss.getData('health') || 0;
+            const maxHp = this.currentBoss.getData('maxHealth') || 1;
+            const pct = Math.max(0, Math.min(1, hp / maxHp));
+            this.hudUI.updateBossBar(pct);
+
+            // 阶段阈值检测（出场记录初阶，之后每次阈值跨越触发符卡宣言）
+            const lastPhase = this.currentBoss.getData('phase') || 0;
+            let newPhase = 1;
+            if (pct <= 0.2) newPhase = 5;
+            else if (pct <= 0.35) newPhase = 4;
+            else if (pct <= 0.7) newPhase = 3;
+            else if (pct <= 0.9) newPhase = 2;
+            if (newPhase > lastPhase) {
+                this.currentBoss.setData('phase', newPhase);
+                if (lastPhase > 0) {
+                    const bossName = this.currentBoss.getData('bossName') || 'BOSS';
+                    const FUCA = ['绯红之雨', '飞刃螺旋', '终焉之环', '虚无之海'];
+                    const fucaName = FUCA[(newPhase - 2) % FUCA.length];
+                    this.hudUI.showBossDeclaration(`符卡宣言 · ${bossName}【${fucaName}】`);
+                    audioManager.playProceduralSFX('skill');
+                    this.screenEffects.shake(10, 400);
+                }
+            }
+
+            // Boss 机动：正弦横移 + 边界限制
+            const t = this.time.now / 1000;
+            this.currentBoss.x += Math.sin(t * 1.5) * 40 * this.game.loop.delta / 1000;
+            this.currentBoss.x = Phaser.Math.Clamp(this.currentBoss.x, 40, this.cameras.main.width - 40);
         }
     }
 
@@ -1188,6 +1229,15 @@ export class GameScene extends Phaser.Scene {
         enemy.setData('enemyId', enemyId);
         enemy.setData('radius', enemyRadius);
 
+        // Boss 战斗绑定：血条 + 阶段跟踪
+        if (isBoss) {
+            this.currentBoss = enemy;
+            const bossName = config ? config.name : 'BOSS';
+            enemy.setData('bossName', bossName);
+            enemy.setData('phase', 0);
+            this.hudUI.showBossBar(bossName, 1);
+        }
+
         // 添加敌人光晕 - 关联到enemy以便销毁时清理
         const glow = this.add.circle(x, y, enemyRadius + 10, enemyColor, 0.3);
         enemy.setData('glow', glow);
@@ -1385,6 +1435,10 @@ export class GameScene extends Phaser.Scene {
         }
         if (enemy.active) {
             enemy.destroy();
+        }
+        if (this.currentBoss === enemy) {
+            this.currentBoss = null;
+            this.hudUI.hideBossBar();
         }
     }
 

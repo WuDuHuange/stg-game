@@ -283,6 +283,101 @@ const BOSS_DATABASE: BossConfig[] = [
                 bulletPattern: 'spiral'
             }
         ]
+    },
+    {
+        id: 'boss_sentinel',
+        name: '哨兵·贰式',
+        category: EnemyCategory.BOSS,
+        rarity: EnemyRarity.BOSS,
+        health: 1200,
+        damage: 25,
+        speed: 35,
+        score: 8000,
+        experience: 800,
+        color: 0x44aaff,
+        radius: 44,
+        spawnWeight: 0,
+        phases: [
+            {
+                healthThreshold: 1.0,
+                speed: 35,
+                damage: 15,
+                attackInterval: 1600,
+                bulletCount: 6,
+                bulletSpeed: 170,
+                bulletPattern: 'spread'
+            },
+            {
+                healthThreshold: 0.65,
+                speed: 45,
+                damage: 22,
+                attackInterval: 1000,
+                bulletCount: 12,
+                bulletSpeed: 190,
+                bulletPattern: 'circle'
+            },
+            {
+                healthThreshold: 0.3,
+                speed: 55,
+                damage: 28,
+                attackInterval: 650,
+                bulletCount: 20,
+                bulletSpeed: 230,
+                bulletPattern: 'spiral'
+            }
+        ]
+    },
+    {
+        id: 'boss_overseer',
+        name: '守望者·零式',
+        category: EnemyCategory.BOSS,
+        rarity: EnemyRarity.BOSS,
+        health: 2000,
+        damage: 30,
+        speed: 30,
+        score: 15000,
+        experience: 1500,
+        color: 0xff44aa,
+        radius: 56,
+        spawnWeight: 0,
+        phases: [
+            {
+                healthThreshold: 1.0,
+                speed: 30,
+                damage: 18,
+                attackInterval: 1400,
+                bulletCount: 8,
+                bulletSpeed: 190,
+                bulletPattern: 'ring'
+            },
+            {
+                healthThreshold: 0.75,
+                speed: 40,
+                damage: 24,
+                attackInterval: 900,
+                bulletCount: 14,
+                bulletSpeed: 210,
+                bulletPattern: 'aimed'
+            },
+            {
+                healthThreshold: 0.45,
+                speed: 50,
+                damage: 30,
+                attackInterval: 600,
+                bulletCount: 24,
+                bulletSpeed: 240,
+                bulletPattern: 'spiral'
+            },
+            {
+                healthThreshold: 0.2,
+                speed: 55,
+                damage: 35,
+                attackInterval: 450,
+                bulletCount: 32,
+                bulletSpeed: 270,
+                bulletPattern: 'laser'
+            }
+        ]
     }
 ];
 
@@ -445,9 +540,9 @@ const LEVEL_DATABASE: LevelConfig[] = [
     },
     {
         id: 'level_5',
-        name: '最终决战',
-        description: '面对毁灭者，这是最终的考验',
-        isBossLevel: true,
+        name: '钢铁洪流',
+        description: '重型与精英单位的进攻，为迎战毁灭者做准备',
+        isBossLevel: false,
         waves: [
             {
                 enemies: [
@@ -468,8 +563,44 @@ const LEVEL_DATABASE: LevelConfig[] = [
             },
             {
                 enemies: [
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'elite_assassin', count: 2 }
+                ],
+                delay: 8000,
+                spawnInterval: 1100
+            }
+        ],
+        backgroundSpeed: 1.4,
+        recommendedLevel: 12
+    },
+    {
+        id: 'level_6',
+        name: '毁灭者歼灭',
+        description: '毁灭者·壹式露出真身，粉碎它！',
+        isBossLevel: true,
+        waves: [
+            {
+                enemies: [
                     { id: 'elite_commander', count: 1 },
                     { id: 'heavy_tank', count: 2 },
+                    { id: 'light_interceptor', count: 2 }
+                ],
+                delay: 0,
+                spawnInterval: 1400
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 2 },
+                    { id: 'heavy_fortress', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 1200
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 1 },
+                    { id: 'elite_commander', count: 1 },
                     { id: 'boss_destroyer', count: 1 }
                 ],
                 delay: 8000,
@@ -478,7 +609,242 @@ const LEVEL_DATABASE: LevelConfig[] = [
         ],
         bossId: 'boss_destroyer',
         backgroundSpeed: 0.3,
-        recommendedLevel: 12
+        recommendedLevel: 16
+    },
+    {
+        id: 'level_7',
+        name: '突袭风口',
+        description: '敌军增援涌入，弹幕密度骤然提升',
+        isBossLevel: false,
+        waves: [
+            {
+                enemies: [
+                    { id: 'light_drone', count: 5 },
+                    { id: 'light_interceptor', count: 2 }
+                ],
+                delay: 0,
+                spawnInterval: 1300
+            },
+            {
+                enemies: [
+                    { id: 'heavy_tank', count: 2 },
+                    { id: 'light_drone', count: 4 }
+                ],
+                delay: 8000,
+                spawnInterval: 1100
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 3 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'light_interceptor', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 1000
+            }
+        ],
+        backgroundSpeed: 1.7,
+        recommendedLevel: 18
+    },
+    {
+        id: 'level_8',
+        name: '黑暗走廊',
+        description: '精英与重装的绞肉机，考验极限走位',
+        isBossLevel: false,
+        waves: [
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'light_drone', count: 4 }
+                ],
+                delay: 0,
+                spawnInterval: 1200
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 3 },
+                    { id: 'elite_assassin', count: 2 }
+                ],
+                delay: 8000,
+                spawnInterval: 1000
+            },
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'elite_assassin', count: 3 },
+                    { id: 'heavy_tank', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 900
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'elite_assassin', count: 2 },
+                    { id: 'light_interceptor', count: 4 }
+                ],
+                delay: 8000,
+                spawnInterval: 850
+            }
+        ],
+        backgroundSpeed: 1.8,
+        recommendedLevel: 20
+    },
+    {
+        id: 'level_9',
+        name: '风暴之眼',
+        description: '哨兵·贰式镇守前线，全力应战',
+        isBossLevel: true,
+        waves: [
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'heavy_fortress', count: 1 },
+                    { id: 'light_drone', count: 3 }
+                ],
+                delay: 0,
+                spawnInterval: 1200
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 3 },
+                    { id: 'heavy_fortress', count: 2 }
+                ],
+                delay: 8000,
+                spawnInterval: 1000
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 1 },
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'boss_sentinel', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 3000
+            }
+        ],
+        bossId: 'boss_sentinel',
+        backgroundSpeed: 0.4,
+        recommendedLevel: 24
+    },
+    {
+        id: 'level_10',
+        name: '噪音',
+        description: '阴影中的杂音渐强，最后的防线动员',
+        isBossLevel: false,
+        waves: [
+            {
+                enemies: [
+                    { id: 'light_drone', count: 6 },
+                    { id: 'light_interceptor', count: 4 }
+                ],
+                delay: 0,
+                spawnInterval: 1000
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 3 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'elite_commander', count: 1 }
+                ],
+                delay: 8000,
+                spawnInterval: 900
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 3 },
+                    { id: 'elite_assassin', count: 3 },
+                    { id: 'light_interceptor', count: 4 }
+                ],
+                delay: 8000,
+                spawnInterval: 850
+            }
+        ],
+        backgroundSpeed: 2.0,
+        recommendedLevel: 27
+    },
+    {
+        id: 'level_11',
+        name: '深渊回响',
+        description: '敌影层叠，弹幕如潮——感受终战前夜',
+        isBossLevel: false,
+        waves: [
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 3 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'heavy_tank', count: 3 }
+                ],
+                delay: 0,
+                spawnInterval: 1000
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 4 },
+                    { id: 'light_drone', count: 5 }
+                ],
+                delay: 8000,
+                spawnInterval: 900
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 4 },
+                    { id: 'elite_commander', count: 3 },
+                    { id: 'elite_assassin', count: 3 }
+                ],
+                delay: 8000,
+                spawnInterval: 800
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 4 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'elite_commander', count: 2 }
+                ],
+                delay: 8000,
+                spawnInterval: 750
+            }
+        ],
+        backgroundSpeed: 2.2,
+        recommendedLevel: 30
+    },
+    {
+        id: 'level_12',
+        name: '终焉审判',
+        description: '守望者·零式降临——跨越最后的弹幕之海',
+        isBossLevel: true,
+        waves: [
+            {
+                enemies: [
+                    { id: 'elite_commander', count: 2 },
+                    { id: 'heavy_fortress', count: 3 },
+                    { id: 'elite_assassin', count: 2 }
+                ],
+                delay: 0,
+                spawnInterval: 1000
+            },
+            {
+                enemies: [
+                    { id: 'heavy_fortress', count: 3 },
+                    { id: 'elite_assassin', count: 4 },
+                    { id: 'light_interceptor', count: 4 }
+                ],
+                delay: 8000,
+                spawnInterval: 850
+            },
+            {
+                enemies: [
+                    { id: 'elite_assassin', count: 2 },
+                    { id: 'heavy_fortress', count: 2 },
+                    { id: 'boss_overseer', count: 1 }
+                ],
+                delay: 10000,
+                spawnInterval: 3000
+            }
+        ],
+        bossId: 'boss_overseer',
+        backgroundSpeed: 0.3,
+        recommendedLevel: 35
     }
 ];
 

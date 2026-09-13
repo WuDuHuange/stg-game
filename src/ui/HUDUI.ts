@@ -40,6 +40,12 @@ export class HUDUI {
     // STG 本核状态（残机/Bomb/Power/擦弹）
     private stgText!: Phaser.GameObjects.Text;
 
+    // Boss 战斗（血条 + 符卡宣言）
+    private bossBarBg!: Phaser.GameObjects.Rectangle;
+    private bossBar!: Phaser.GameObjects.Rectangle;
+    private bossNameText!: Phaser.GameObjects.Text;
+    private bossDeclarationText!: Phaser.GameObjects.Text;
+
     // 关卡信息
     private levelInfoText!: Phaser.GameObjects.Text;
 
@@ -80,6 +86,7 @@ export class HUDUI {
         this.createLevelDisplay();
         this.createComboDisplay();
         this.createSTGDisplay();
+        this.createBossBar();
         this.createSynergyDisplay();
         this.createLevelProgress();
         this.createLevelInfo();
@@ -304,6 +311,82 @@ export class HUDUI {
     }
 
     /**
+     * 创建 Boss 血条与符卡宣言
+     */
+    private createBossBar(): void {
+        const centerX = this.scene.cameras.main.width / 2;
+        const y = 14;
+
+        this.bossBarBg = this.scene.add.rectangle(centerX, y, 520, 10, 0x1a1a2e, 0.9);
+        this.bossBarBg.setStrokeStyle(1, 0xaa3344);
+        this.bossBar = this.scene.add.rectangle(centerX - 260, y, 520, 8, 0xff2244, 1);
+        this.bossBar.setOrigin(0, 0.5);
+        this.bossNameText = this.scene.add.text(centerX, y + 12, '', {
+            fontSize: '13px',
+            color: '#ff88aa',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5, 0);
+
+        this.bossBarBg.setVisible(false);
+        this.bossBar.setVisible(false);
+        this.bossNameText.setVisible(false);
+
+        this.bossDeclarationText = this.scene.add.text(centerX, this.scene.cameras.main.height / 2 - 80, '', {
+            fontSize: '30px',
+            color: '#ff66aa',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4,
+            align: 'center'
+        }).setOrigin(0.5);
+        this.bossDeclarationText.setVisible(false);
+
+        this.container.add([this.bossBarBg, this.bossBar, this.bossNameText, this.bossDeclarationText]);
+    }
+
+    public showBossBar(name: string, healthPercent: number): void {
+        this.bossBarBg.setVisible(true);
+        this.bossBar.setVisible(true);
+        this.bossNameText.setText(name).setVisible(true);
+        this.bossBar.width = Math.max(0, 520 * Math.max(0, Math.min(1, healthPercent)));
+    }
+
+    public updateBossBar(healthPercent: number): void {
+        if (!this.bossBar) return;
+        this.bossBar.width = Math.max(0, 520 * Math.max(0, Math.min(1, healthPercent)));
+    }
+
+    public hideBossBar(): void {
+        if (!this.bossBarBg) return;
+        this.bossBarBg.setVisible(false);
+        this.bossBar.setVisible(false);
+        this.bossNameText.setVisible(false);
+    }
+
+    /**
+     * Boss 阶段切换符卡宣言演出
+     */
+    public showBossDeclaration(text: string): void {
+        if (!this.bossDeclarationText) return;
+        this.bossDeclarationText.setText(text);
+        this.bossDeclarationText.setVisible(true);
+        this.scene.tweens.killTweensOf(this.bossDeclarationText);
+        this.bossDeclarationText.setAlpha(0);
+        this.scene.tweens.add({
+            targets: this.bossDeclarationText,
+            alpha: 1,
+            duration: 250,
+            yoyo: true,
+            hold: 900,
+            onComplete: () => {
+                if (this.bossDeclarationText) this.bossDeclarationText.setVisible(false);
+            }
+        });
+    }
+
+    /**
      * 更新 STG 本核状态显示
      */
     public updateSTG(st: { lives: number; bombs: number; power: number; graze: number; useHealthMode: boolean }): void {
@@ -364,11 +447,10 @@ export class HUDUI {
     private createLevelProgress(): void {
         this.levelProgressContainer = this.scene.add.container(0, 0);
 
-        const levelNames = ['I', 'II', 'III', 'IV', 'V'];
-        const isBoss = [false, false, true, false, true];
+        const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
         const startX = 10;
         const y = this.scene.cameras.main.height - 55;
-        const nodeSpacing = 52;
+        const nodeSpacing = 48;
         const nodeRadius = 8;
 
         for (let i = 0; i < this.totalLevels; i++) {
@@ -398,16 +480,16 @@ export class HUDUI {
             const node = this.scene.add.circle(x, y, nodeRadius, 0x333355, 0.8);
             node.setStrokeStyle(2, 0x4a4a5e);
 
-            // 关卡编号标签
-            const label = this.scene.add.text(x, y + nodeRadius + 10, levelNames[i], {
+            // 关卡编号标签（罗马数字，章末 Boss 关高亮星标）
+            const label = this.scene.add.text(x, y + nodeRadius + 10, ROMAN[i] || `${i + 1}`, {
                 fontSize: '9px',
                 color: '#555555',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
 
-            // Boss标记
+            // Boss标记：每个章节（第3/6/9/12关）
             let bossMark: Phaser.GameObjects.Text | undefined;
-            if (isBoss[i]) {
+            if ((i + 1) % 3 === 0) {
                 bossMark = this.scene.add.text(x, y - nodeRadius - 8, '★', {
                     fontSize: '10px',
                     color: '#555555'
@@ -423,6 +505,26 @@ export class HUDUI {
         this.setLevelProgress(0);
 
         this.container.add(this.levelProgressContainer);
+    }
+
+    /**
+     * 初始化关卡进度（重建节点，支持总关卡数变化）
+     */
+    public initLevelProgress(total: number): void {
+        this.totalLevels = total;
+        this.levelNodes.forEach(entry => {
+            entry.node.destroy();
+            entry.glow.destroy();
+            entry.label.destroy();
+            if (entry.bossMark) entry.bossMark.destroy();
+        });
+        this.levelNodes = [];
+        this.levelLines.forEach(l => l.destroy());
+        this.levelLines = [];
+        if (this.levelProgressContainer) {
+            this.levelProgressContainer.destroy();
+        }
+        this.createLevelProgress();
     }
 
     /**
