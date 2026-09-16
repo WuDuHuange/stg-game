@@ -30,6 +30,9 @@ export class ResultUI {
         maxCombo: number;
         timeElapsed: number;
         level: number;
+        rushWaves?: number;
+        rushBest?: number;
+        isNewRushBest?: boolean;
     }): void {
         if (this.visible) return;
         this.visible = true;
@@ -98,8 +101,13 @@ export class ResultUI {
         const seconds = Math.floor(data.timeElapsed % 60);
         this.createStatRow('用时', `${minutes}:${seconds.toString().padStart(2, '0')}`, startY + gap * 3, '#ffffff');
 
-        // 关卡
-        this.createStatRow('关卡', `第 ${data.level} 关`, startY + gap * 4, '#ffffff');
+        // 关卡（无尽模式显示波次与最佳纪录）
+        if (data.rushWaves !== undefined) {
+            const rushLabel = data.isNewRushBest ? '无尽 · 新纪录' : '无尽模式';
+            this.createStatRow(rushLabel, `第 ${data.rushWaves} 波  最佳 ${data.rushBest}`, startY + gap * 4, data.isNewRushBest ? '#ffd700' : '#00ffcc');
+        } else {
+            this.createStatRow('关卡', `第 ${data.level} 关`, startY + gap * 4, '#ffffff');
+        }
 
         // 评级（根据分数计算）
         const rank = this.calculateRank(data.score);

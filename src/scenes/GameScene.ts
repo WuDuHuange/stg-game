@@ -22,6 +22,7 @@ import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, getAllLevels, LevelConfig, WaveConfig } from '@data/LevelConfigs';
 import { ENEMY_PATTERNS } from '@data/BulletPatterns';
 import { getStoredDifficulty, DifficultyConfig } from '@data/Difficulty';
+import { submitRush, getBestRush } from '@data/RushRecords';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
 import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
 
@@ -120,6 +121,9 @@ export class GameScene extends Phaser.Scene {
     private pickups!: Phaser.GameObjects.Group;
     private difficulty: DifficultyConfig = getStoredDifficulty();
     private currentBoss: any = null;
+    private rushMode: boolean = false;
+    private rushWaveIndex: number = 0;
+    private rushBest: number = 0;
 
     constructor() {
         super({ key: 'GameScene' });
@@ -187,6 +191,12 @@ export class GameScene extends Phaser.Scene {
         // 创建场景管理器
         this.sceneManager = new SceneManager(this);
         this.sceneManager.initialize();
+
+        // 无尽模式检测：scene 参数 mode === 'rush'
+        this.rushMode = (this.scene.settings.data as any)?.mode === 'rush';
+        if (this.rushMode) {
+            this.rushBest = getBestRush()?.waves ?? 0;
+        }
 
         // 创建HUD UI
         this.hudUI = new HUDUI(this);
@@ -930,7 +940,15 @@ export class GameScene extends Phaser.Scene {
         this.currentLevelIndex = 0;
         this.currentWaveIndex = 0;
         this.levelComplete = false;
-        this.startLevel(this.currentLevelIndex);
+
+        if (this.rushMode) {
+            // 无尽模式：由无限波次生成器驱动（最高纪录展示于 HUD）
+            this.rushWaveIndex = 0;
+            this.hudUI.updateLevelInfo(1, '无尽模式');
+            this.startRushWave();
+        } else {
+            this.startLevel(this.currentLevelIndex);
+        }
 
         // 启动敌人射击定时器（每500ms检查一次哪些敌人需要射击）
         this.enemyFireTimer = this.time.addEvent({
@@ -938,6 +956,109 @@ export class GameScene extends Phaser.Scene {
             callback: this.processEnemyFire,
             callbackScope: this,
             loop: true
+        });
+    }
+
+    /**
+     * 开始无尽模式波次
+     */
+    private startRushWave(): void {
+        if (this.gameOver) return;
+
+        const waveEnemies = this.generateRushWave(this.rushWaveIndex);
+        const total = waveEnemies.reduce((sum, e) => sum + e.count, 0);
+
+        // 复用关卡波次结构：每波视为单波关卡
+        const fakeLevel: LevelConfig = {
+            id: 'rush',
+            name: '无尽模式',
+            description: '',
+            isBossLevel: false,
+            backgroundSpeed: 1,
+            recommendedLevel: 1,
+            waves: [
+                {
+                    enemies: waveEnemies,
+                    delay: 0,
+                    spawnInterval: Math.max(350, 750 - this.rushWaveIndex * 15)
+                }
+            ]
+        };
+
+        this.currentLevelConfig = fakeLevel;
+        this.currentWaveIndex = 0;
+        this.waveEnemiesSpawned = 0;
+        this.startWave();
+    }
+
+    /**
+     * 无尽模式生成波次敌人组合（每5波一个 Boss 波，强度随波次递增）
+     */
+    private generateRushWave(index: number): { id: string; count: number }[] {
+        const enemies: { id: string; count: number }[] = [];
+        const bossWave = (index + 1) % 5 === 0;
+
+        if (bossWave) {
+            const bossIds = ['boss_guardian', 'boss_destroyer', 'boss_sentinel', 'boss_overseer'];
+            const bossIndex = Math.min(Math.floor(index / 5), bossIds.length - 1);
+            enemies.push({ id: bossIds[bossIndex], count: 1 });
+            enemies.push({ id: 'elite_commander', count: 1 + Math.floor(index / 6) });
+            enemies.push({ id: 'heavy_fortress', count: 1 + Math.floor(index / 8) });
+            return enemies;
+        }
+
+        const pool = this.getRushEnemyPool(index);
+        const groups = Math.min(6, 3 + Math.floor(index / 3));
+        for (let i = 0; i < groups; i++) {
+            const e = pool[Phaser.Math.Between(0, pool.length - 1)];
+            const existing = enemies.find(x => x.id === e.id);
+            if (existing) {
+                existing.count += 1 + Math.floor(index / 12);
+            } else {
+                enemies.push({ id: e.id, count: 1 + Math.floor(index / 12) });
+            }
+        }
+        return enemies;
+    }
+
+    private getRushEnemyPool(index: number): { id: string }[] {
+        if (index < 5) {
+            return [{ id: 'light_scout' }, { id: 'light_drone' }, { id: 'light_interceptor' }];
+        } else if (index < 10) {
+            return [{ id: 'light_interceptor' }, { id: 'heavy_tank' }, { id: 'heavy_fortress' }];
+        } else if (index < 18) {
+            return [{ id: 'heavy_fortress' }, { id: 'elite_commander' }, { id: 'elite_assassin' }];
+        }
+        return [{ id: 'elite_assassin' }, { id: 'elite_commander' }, { id: 'heavy_fortress' }];
+    }
+
+    /**
+     * 无尽模式波次清空：进入下一波
+     */
+    private onRushWaveCleared(): void {
+        this.rushWaveIndex++;
+        this.hudUI.updateLevelInfo(this.rushWaveIndex + 1, '无尽模式');
+
+        // 展示波次进度
+        const centerX = this.cameras.main.width / 2;
+        const banner = this.add.text(centerX, this.cameras.main.height / 2 - 60, `WAVE ${this.rushWaveIndex + 1}`, {
+            fontSize: '26px',
+            color: '#00ffcc',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        this.tweens.add({
+            targets: banner,
+            alpha: 0,
+            y: '-=20',
+            duration: 1200,
+            delay: 800,
+            onComplete: () => banner.destroy()
+        });
+
+        this.time.delayedCall(1500, () => {
+            if (!this.gameOver) this.startRushWave();
         });
     }
 
@@ -1168,6 +1289,10 @@ export class GameScene extends Phaser.Scene {
             const totalWaves = this.currentLevelConfig.waves.length;
 
             this.waitForWaveClear(() => {
+                if (this.rushMode) {
+                    this.onRushWaveCleared();
+                    return;
+                }
                 this.currentWaveIndex = nextWaveIndex;
                 if (nextWaveIndex < totalWaves) {
                     this.showWaveStartMessage(nextWaveIndex + 1, totalWaves);
@@ -1202,7 +1327,7 @@ export class GameScene extends Phaser.Scene {
         const config = getEnemyConfig(enemyId);
         const enemyRadius = config ? config.radius : (isBoss ? 30 : 15);
         const enemyColor = config ? config.color : (isBoss ? 0xff4400 : 0xff0000);
-        const enemyHealth = (config ? config.health : (isBoss ? 200 : 20)) * this.difficulty.enemyHealthMult;
+        const enemyHealth = (config ? config.health : (isBoss ? 200 : 20)) * this.difficulty.enemyHealthMult * (this.rushMode ? 1 + this.rushWaveIndex * 0.08 : 1);
         const enemyDamage = config ? config.damage : 10;
         const enemySpeed = config ? config.speed : Phaser.Math.Between(50, 150);
         const enemyScore = config ? config.score : (isBoss ? 500 : 100);
@@ -1895,6 +2020,18 @@ export class GameScene extends Phaser.Scene {
             this.comboTimer.destroy();
         }
 
+        // 无尽模式：提交排行榜纪录
+        let rushBest = 0;
+        let isNewRushBest = false;
+        if (this.rushMode) {
+            const result = submitRush(this.rushWaveIndex, this.score);
+            rushBest = result.best.waves;
+            isNewRushBest = result.isNewBest;
+            if (isNewRushBest) {
+                audioManager.playProceduralSFX('upgrade');
+            }
+        }
+
         // 设置结算UI层级
         this.currentUILayer = UILayerLevel.RESULT;
 
@@ -1905,7 +2042,10 @@ export class GameScene extends Phaser.Scene {
             enemiesKilled: this.killCount,
             maxCombo: this.maxCombo,
             timeElapsed: this.time.now / 1000,
-            level: 1
+            level: 1,
+            rushWaves: this.rushMode ? this.rushWaveIndex : undefined,
+            rushBest: this.rushMode ? rushBest : undefined,
+            isNewRushBest
         });
     }
 

@@ -190,10 +190,21 @@ export class MenuScene extends Phaser.Scene {
             () => this.startGame()
         ));
 
-        // 设置按钮
+        // 无尽模式按钮
         this.menuButtons.push(this.createButton(
             centerX,
             startY + spacing,
+            buttonWidth,
+            buttonHeight,
+            '无尽模式',
+            buttonStyle,
+            () => this.startRush()
+        ));
+
+        // 设置按钮
+        this.menuButtons.push(this.createButton(
+            centerX,
+            startY + spacing * 2,
             buttonWidth,
             buttonHeight,
             '设置',
@@ -204,7 +215,7 @@ export class MenuScene extends Phaser.Scene {
         // 退出按钮
         this.menuButtons.push(this.createButton(
             centerX,
-            startY + spacing * 2,
+            startY + spacing * 3,
             buttonWidth,
             buttonHeight,
             '退出游戏',
@@ -373,6 +384,18 @@ export class MenuScene extends Phaser.Scene {
         this.cameras.main.fadeOut(500, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.start('GameScene');
+        });
+    }
+
+    /**
+     * 开始无尽模式
+     */
+    private startRush(): void {
+        console.log('无尽模式');
+
+        this.cameras.main.fadeOut(500, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.start('GameScene', { mode: 'rush' });
         });
     }
 
