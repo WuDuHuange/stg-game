@@ -280,4 +280,34 @@ Difficulty { bulletDensity, bulletSpeed, enemyHP, enemyFireRate, scoreMultiplier
 - `npx vitest run`：24 tests 全绿（新增 STGPlayerSystem 10、BulletPatterns 4）
 - `npm run lint`：0 error（剩余 22 个 warning 均为存量未使用变量）
 
-### M2（程序化美术生成 + 资源加载管线）待实施
+### M2（程序化美术生成 + 资源加载管线）已完工
+- `src/data/AssetManifest.ts`：11 个贴图 key/路径/可替换契约；`docs/art-assets.md` 美术规格清单
+- `src/game/TextureFactory.ts`：程序化绘制自机/敌机/子弹/道具贴图（`proc_` 前缀兜底）
+- `BootScene` 加载管线：外部 png（assets/textures/*.png）优先，缺失自动回退程序化；替换文件即生效
+- `GameScene` 全面贴图化：自机/敌人/子弹/道具从圆形升级为 image；受伤闪烁改用 setTint
+
+### M3a（难度系统）已完工
+- `src/data/Difficulty.ts`：四档难度（Easy 血条制降级 / Normal+ 残机制），弹速/射速/血量/分数按难度缩放
+- `SettingsUI` 图形页新增「难度」选项并持久化；`GameScene` 全面接线；`HUD` 血条制用 STG 血量
+
+### M3（战役扩充）已完工
+- `LevelConfigs` 扩至 12 关 4 章，新增 Boss `boss_sentinel`（哨兵·贰式）/ `boss_overseer`（守望者·零式）
+- Boss 战斗：`HUDUI` 顶部血条 + 符卡宣言演出；`GameScene.updateBossUI()` 阶段检测/宣言/正弦机动
+- `HUD` 关卡进度动态化（12 节点、章末 Boss 星标）
+
+### M4（无尽模式 + 排行榜）已完工
+- `src/data/RushRecords.ts`：localStorage 排行榜（`stg_rush_best`），waves 优先/同波比分数
+- 主菜单「无尽模式」入口；`GameScene` 无限波次：随机敌人组合随波递增、Boss 波每 5 波一次、敌人血量/数量/射速递增
+- 结算显示「到达波次 / 最佳纪录」，新纪录高亮；新增 5 单测
+
+### M4（机娘系统）已完工
+- `src/data/MechaData.ts`：3 台差异化机体（判定点/速度/初始火力/伤害倍率/残机/Bomb）
+- `src/data/Profile.ts`：局间存档（所选机娘/解锁状态/最大通关数），随主线进度解锁
+- 主菜单选机展示 + 数字键 1/2/3 切换；`GameScene` 应用机娘属性（判定点/速度/火力/Bomb/伤害/光晕配色）
+- **构筑决策（评审确认）：装备系统保留 5 槽位 + 进化树不推翻，机娘作为构筑差异化主体接入**
+
+### M5（打磨）待实施
+真实 BGM/SFX 替换程序化音效、新手引导、对象池性能、存档完善
+
+### 后续验证提示
+当前机器 `esbuild.exe` 被安全策略拦截（0xC0000409），`vitest`/`vite build` 无法运行，属环境限制；验证已用 `tsc --noEmit`（本次改动文件无新错误）与 `eslint` 0 error 替代。
