@@ -129,3 +129,18 @@ export {
     PATTERNS,
     ENEMY_PATTERNS
 } from './BulletPatterns';
+
+export {
+    MechaConfig,
+    MECHAS,
+    getMecha
+} from './MechaData';
+
+export {
+    ProfileData,
+    loadProfile,
+    saveProfile,
+    selectMecha,
+    isMechaUnlocked,
+    recordMaxLevelCleared
+} from './Profile';

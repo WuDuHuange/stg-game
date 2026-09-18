@@ -22,7 +22,9 @@ import { SkillType } from '@data/SkillData';
 import { getLevelConfig, getEnemiesForLevel, getEnemyConfig, getAllLevels, LevelConfig, WaveConfig } from '@data/LevelConfigs';
 import { ENEMY_PATTERNS } from '@data/BulletPatterns';
 import { getStoredDifficulty, DifficultyConfig } from '@data/Difficulty';
-import { submitRush, getBestRush } from '@data/RushRecords';
+import { submitRush } from '@data/RushRecords';
+import { getMecha, MechaConfig } from '@data/MechaData';
+import { loadProfile, recordMaxLevelCleared } from '@data/Profile';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
 import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
 
@@ -123,7 +125,8 @@ export class GameScene extends Phaser.Scene {
     private currentBoss: any = null;
     private rushMode: boolean = false;
     private rushWaveIndex: number = 0;
-    private rushBest: number = 0;
+
+    private mecha: MechaConfig = getMecha('mecha_01');
 
     constructor() {
         super({ key: 'GameScene' });
@@ -172,12 +175,16 @@ export class GameScene extends Phaser.Scene {
         this.enemies = this.add.group();
         this.pickups = this.add.group();
 
-        // STG 本核系统
+        // STG 本核系统（应用所选机娘性能）
+        this.mecha = getMecha(loadProfile().selectedMecha);
         this.stgPlayer = new STGPlayerSystem({
             useHealthMode: this.difficulty.useHealthMode,
-            lives: this.difficulty.lives,
-            health: this.difficulty.health
+            lives: this.mecha.lives,
+            health: this.difficulty.health,
+            hitboxRadius: this.mecha.hitboxRadius,
+            bombs: this.mecha.bombs
         });
+        this.stgPlayer.addPower(this.mecha.powerBonus);
         this.bulletPatternEngine = new BulletPatternEngine(this);
 
         // 创建粒子系统
@@ -194,9 +201,7 @@ export class GameScene extends Phaser.Scene {
 
         // 无尽模式检测：scene 参数 mode === 'rush'
         this.rushMode = (this.scene.settings.data as any)?.mode === 'rush';
-        if (this.rushMode) {
-            this.rushBest = getBestRush()?.waves ?? 0;
-        }
+
 
         // 创建HUD UI
         this.hudUI = new HUDUI(this);
@@ -295,12 +300,12 @@ export class GameScene extends Phaser.Scene {
         this.player.setScale(1.05);
         this.player.setData('tintNormal', 0xffffff);
 
-        // 添加玩家光晕效果
+        // 添加玩家光晕效果（机娘配色）
         this.playerGlow = this.add.circle(
             this.cameras.main.width / 2,
             this.cameras.main.height - 100,
             30,
-            0xe94560,
+            this.mecha.color,
             0.3
         );
 
@@ -314,8 +319,8 @@ export class GameScene extends Phaser.Scene {
         );
         this.hitboxDot.setDepth(10);
 
-        // 设置玩家属性
-        this.player.setData('speed', 300);
+        // 设置玩家属性（机娘速度）
+        this.player.setData('speed', this.mecha.moveSpeed);
     }
 
     /**
@@ -871,7 +876,7 @@ export class GameScene extends Phaser.Scene {
     private shoot(): void {
         const level = this.playerManager.getLevelData().level;
         const power = this.stgPlayer.getPower();
-        const baseDamage = 10 + (level - 1) * 2 + power * 2;
+        const baseDamage = (10 + (level - 1) * 2 + power * 2) * this.mecha.damageMult;
 
         // Power 决定弹道数量与角度（0-1 单发，2-3 三路，4-5 五路+子机）
         let angles: number[] = [0];
@@ -966,7 +971,7 @@ export class GameScene extends Phaser.Scene {
         if (this.gameOver) return;
 
         const waveEnemies = this.generateRushWave(this.rushWaveIndex);
-        const total = waveEnemies.reduce((sum, e) => sum + e.count, 0);
+
 
         // 复用关卡波次结构：每波视为单波关卡
         const fakeLevel: LevelConfig = {
@@ -1466,6 +1471,9 @@ export class GameScene extends Phaser.Scene {
 
     private handleVictory(): void {
         this.gameOver = true;
+
+        // 记录主线通关进度（用于机娘解锁）
+        recordMaxLevelCleared(this.currentLevelIndex + 1);
 
         if (this.waveTimer) this.waveTimer.destroy();
         if (this.enemyFireTimer) this.enemyFireTimer.destroy();

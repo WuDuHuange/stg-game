@@ -4,6 +4,8 @@
 
 import Phaser from 'phaser';
 import { SettingsUI } from '@ui/SettingsUI';
+import { MECHAS, getMecha } from '@data/MechaData';
+import { loadProfile, selectMecha, isMechaUnlocked } from '@data/Profile';
 
 export class MenuScene extends Phaser.Scene {
     private titleText!: Phaser.GameObjects.Text;
@@ -17,6 +19,8 @@ export class MenuScene extends Phaser.Scene {
     private upKey!: Phaser.Input.Keyboard.Key;
     private downKey!: Phaser.Input.Keyboard.Key;
     private enterKey!: Phaser.Input.Keyboard.Key;
+    private mechaText!: Phaser.GameObjects.Text;
+    private mechaInfoText!: Phaser.GameObjects.Text;
     private stars: Phaser.GameObjects.Arc[] = [];
 
     constructor() {
@@ -37,6 +41,9 @@ export class MenuScene extends Phaser.Scene {
 
         // 创建菜单按钮
         this.createMenuButtons();
+
+        // 创建机娘选择展示
+        this.createMechaSelect();
 
         // 创建设置UI
         this.settingsUI = new SettingsUI(this);
@@ -222,6 +229,53 @@ export class MenuScene extends Phaser.Scene {
             buttonStyle,
             () => this.exitGame()
         ));
+    }
+
+    /**
+     * 创建机娘选择展示（数字键 1/2/3 切换）
+     */
+    private createMechaSelect(): void {
+        const centerX = this.cameras.main.width / 2;
+        const y = 596;
+
+        this.mechaText = this.add.text(centerX, y, '', {
+            fontSize: '18px',
+            color: '#00ffcc',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        this.mechaInfoText = this.add.text(centerX, y + 26, '', {
+            fontSize: '12px',
+            color: '#aaaaaa'
+        }).setOrigin(0.5);
+
+        this.refreshMechaDisplay();
+
+        // 数字键切换机娘
+        const keys = [
+            this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+            this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+            this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE)
+        ];
+        keys.forEach((key, index) => {
+            key.on('down', () => {
+                if (this.isSettingsOpen) return;
+                selectMecha(MECHAS[index].id);
+                this.refreshMechaDisplay();
+            });
+        });
+    }
+
+    private refreshMechaDisplay(): void {
+        const profile = loadProfile();
+        const mecha = getMecha(profile.selectedMecha);
+        const colorHex = `#${mecha.color.toString(16).padStart(6, '0')}`;
+        const unlocked = isMechaUnlocked(profile, mecha.id);
+        this.mechaText.setText(`机娘：${mecha.name}  ${mecha.code}`).setColor(unlocked ? colorHex : '#666666');
+        const stats = `判定${mecha.hitboxRadius}·速度${mecha.moveSpeed}·火力+${mecha.powerBonus}·伤害x${mecha.damageMult}·残机${mecha.lives}·Bomb${mecha.bombs}`;
+        this.mechaInfoText.setText(`${stats}    [1/2/3] 选择机娘${unlocked ? '' : `（${mecha.hint}）`}`);
     }
 
     /**
