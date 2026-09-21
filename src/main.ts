@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
+import { TutorialScene } from './scenes/TutorialScene';
 
 /**
  * 游戏配置
@@ -24,7 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
             debug: false
         }
     },
-    scene: [BootScene, MenuScene, GameScene],
+    scene: [BootScene, MenuScene, TutorialScene, GameScene],
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH

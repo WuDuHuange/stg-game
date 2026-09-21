@@ -183,8 +183,8 @@ export class MenuScene extends Phaser.Scene {
         const buttonWidth = 280;
         const buttonHeight = 55;
         const centerX = this.cameras.main.width / 2;
-        const startY = 320;
-        const spacing = 75;
+        const startY = 300;
+        const spacing = 62;
 
         // 开始游戏按钮
         this.menuButtons.push(this.createButton(
@@ -197,10 +197,21 @@ export class MenuScene extends Phaser.Scene {
             () => this.startGame()
         ));
 
-        // 无尽模式按钮
+        // 新手引导按钮
         this.menuButtons.push(this.createButton(
             centerX,
             startY + spacing,
+            buttonWidth,
+            buttonHeight,
+            '新手引导',
+            buttonStyle,
+            () => this.startTutorial()
+        ));
+
+        // 无尽模式按钮
+        this.menuButtons.push(this.createButton(
+            centerX,
+            startY + spacing * 2,
             buttonWidth,
             buttonHeight,
             '无尽模式',
@@ -211,7 +222,7 @@ export class MenuScene extends Phaser.Scene {
         // 设置按钮
         this.menuButtons.push(this.createButton(
             centerX,
-            startY + spacing * 2,
+            startY + spacing * 3,
             buttonWidth,
             buttonHeight,
             '设置',
@@ -222,7 +233,7 @@ export class MenuScene extends Phaser.Scene {
         // 退出按钮
         this.menuButtons.push(this.createButton(
             centerX,
-            startY + spacing * 3,
+            startY + spacing * 4,
             buttonWidth,
             buttonHeight,
             '退出游戏',
@@ -450,6 +461,18 @@ export class MenuScene extends Phaser.Scene {
         this.cameras.main.fadeOut(500, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.start('GameScene', { mode: 'rush' });
+        });
+    }
+
+    /**
+     * 开始新手引导
+     */
+    private startTutorial(): void {
+        console.log('新手引导');
+
+        this.cameras.main.fadeOut(500, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.start('TutorialScene');
         });
     }
 
