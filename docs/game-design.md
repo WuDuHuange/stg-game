@@ -306,8 +306,9 @@ Difficulty { bulletDensity, bulletSpeed, enemyHP, enemyFireRate, scoreMultiplier
 - 主菜单选机展示 + 数字键 1/2/3 切换；`GameScene` 应用机娘属性（判定点/速度/火力/Bomb/伤害/光晕配色）
 - **构筑决策（评审确认）：装备系统保留 5 槽位 + 进化树不推翻，机娘作为构筑差异化主体接入**
 
-### M5（打磨）待实施
-真实 BGM/SFX 替换程序化音效、新手引导、对象池性能、存档完善
+### M5（打磨）部分完工
+- v5.5 新手引导：独立 `TutorialScene`（移动 → Focus → 判定点 → 擦弹 → 射击与 Bomb → 完成六步教学），主菜单「新手引导」入口，含擦弹判定/判定点高亮/Bomb 清屏实操
+- 剩余：真实 BGM/SFX 替换程序化音效、对象池性能优化、存档结构完善
 
 ### 后续验证提示
 当前机器 `esbuild.exe` 被安全策略拦截（0xC0000409），`vitest`/`vite build` 无法运行，属环境限制；验证已用 `tsc --noEmit`（本次改动文件无新错误）与 `eslint` 0 error 替代。
