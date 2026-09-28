@@ -5,7 +5,8 @@
 import Phaser from 'phaser';
 import { SettingsUI } from '@ui/SettingsUI';
 import { MECHAS, getMecha } from '@data/MechaData';
-import { loadProfile, selectMecha, isMechaUnlocked } from '@data/Profile';
+import { loadProfile, selectMecha, isMechaUnlocked, isDifficultyUnlocked, DIFFICULTY_UNLOCK_LEVELS } from '@data/Profile';
+import { DIFFICULTIES, DIFFICULTY_ORDER } from '@data/Difficulty';
 
 export class MenuScene extends Phaser.Scene {
     private titleText!: Phaser.GameObjects.Text;
@@ -21,6 +22,7 @@ export class MenuScene extends Phaser.Scene {
     private enterKey!: Phaser.Input.Keyboard.Key;
     private mechaText!: Phaser.GameObjects.Text;
     private mechaInfoText!: Phaser.GameObjects.Text;
+    private careerText!: Phaser.GameObjects.Text;
     private stars: Phaser.GameObjects.Arc[] = [];
 
     constructor() {
@@ -262,7 +264,14 @@ export class MenuScene extends Phaser.Scene {
             color: '#aaaaaa'
         }).setOrigin(0.5);
 
+        this.careerText = this.add.text(centerX, y + 52, '', {
+            fontSize: '12px',
+            color: '#888888',
+            align: 'center'
+        }).setOrigin(0.5);
+
         this.refreshMechaDisplay();
+        this.refreshCareerDisplay();
 
         // 数字键切换机娘
         const keys = [
@@ -287,6 +296,21 @@ export class MenuScene extends Phaser.Scene {
         this.mechaText.setText(`机娘：${mecha.name}  ${mecha.code}`).setColor(unlocked ? colorHex : '#666666');
         const stats = `判定${mecha.hitboxRadius}·速度${mecha.moveSpeed}·火力+${mecha.powerBonus}·伤害x${mecha.damageMult}·残机${mecha.lives}·Bomb${mecha.bombs}`;
         this.mechaInfoText.setText(`${stats}    [1/2/3] 选择机娘${unlocked ? '' : `（${mecha.hint}）`}`);
+    }
+
+    /**
+     * 刷新生涯总览（通关进度/累计分数/统计/难度解锁）
+     */
+    private refreshCareerDisplay(): void {
+        const profile = loadProfile();
+        const difficultyStatus = DIFFICULTY_ORDER.map(d => {
+            const unlocked = isDifficultyUnlocked(profile, d);
+            const need = DIFFICULTY_UNLOCK_LEVELS[d];
+            return unlocked ? `${DIFFICULTIES[d].name}✓` : `${DIFFICULTIES[d].name}(通关${need ?? 0}关)`;
+        }).join(' ');
+        this.careerText.setText(
+            `通关 ${profile.maxLevelCleared}/12 · 累计分数 ${profile.totalScore.toLocaleString()} · 擦弹 ${profile.bestGraze} · 最高连击 ${profile.bestCombo}\n难度解锁：${difficultyStatus}`
+        );
     }
 
     /**

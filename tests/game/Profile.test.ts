@@ -4,7 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MECHAS, getMecha } from '../../src/data/MechaData';
-import { loadProfile, selectMecha, isMechaUnlocked, recordMaxLevelCleared } from '../../src/data/Profile';
+import {
+    loadProfile, selectMecha, isMechaUnlocked, recordMaxLevelCleared,
+    recordStageResult, isDifficultyUnlocked, recordPlay
+} from '../../src/data/Profile';
 
 describe('MechaData', () => {
     it('t有3台机娘且默认第一台', () => {
@@ -56,5 +59,36 @@ describe('Profile', () => {
         const p = recordMaxLevelCleared(3);
         expect(loadProfile().maxLevelCleared).toBe(5);
         expect(p.maxLevelCleared).toBe(5);
+    });
+
+    it('记录关卡成绩：最佳分数与通关次数', () => {
+        recordStageResult(3, 5000);
+        recordStageResult(3, 3000);
+        const p = loadProfile();
+        expect(p.stageRecords[3].bestScore).toBe(5000);
+        expect(p.stageRecords[3].clears).toBe(2);
+        expect(p.totalScore).toBe(8000);
+    });
+
+    it('难度解锁：Easy/Normal 默认可用，Hard/Lunatic 按进度', () => {
+        const p = loadProfile();
+        expect(isDifficultyUnlocked(p, 'easy')).toBe(true);
+        expect(isDifficultyUnlocked(p, 'normal')).toBe(true);
+        expect(isDifficultyUnlocked(p, 'hard')).toBe(false);
+        recordMaxLevelCleared(4);
+        expect(isDifficultyUnlocked(loadProfile(), 'hard')).toBe(true);
+        expect(isDifficultyUnlocked(loadProfile(), 'lunatic')).toBe(false);
+    });
+
+    it('记录游玩：场次/机娘计数/最佳连击擦弹', () => {
+        recordPlay('mecha_01', { combo: 30, graze: 15 });
+        recordPlay('mecha_01', { combo: 50, graze: 8 });
+        recordPlay('mecha_02', { combo: 10, graze: 20 });
+        const p = loadProfile();
+        expect(p.totalPlays).toBe(3);
+        expect(p.mechaPlays['mecha_01']).toBe(2);
+        expect(p.mechaPlays['mecha_02']).toBe(1);
+        expect(p.bestCombo).toBe(50);
+        expect(p.bestGraze).toBe(20);
     });
 });

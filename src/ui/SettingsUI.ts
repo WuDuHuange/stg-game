@@ -3,6 +3,7 @@
  * 负责显示设置界面，支持图形、音频、控制等设置
  */
 import { DIFFICULTIES, DIFFICULTY_ORDER, getStoredDifficulty, setStoredDifficulty } from '@data/Difficulty';
+import { loadProfile, isDifficultyUnlocked, DIFFICULTY_UNLOCK_LEVELS } from '@data/Profile';
 
 export class SettingsUI {
     private scene: Phaser.Scene;
@@ -188,6 +189,18 @@ export class SettingsUI {
     }
 
     /**
+     * 难度解锁状态提示（'简单✓ 普通✓ 困难(通关4关解锁) 疯狂(通关9关解锁)'）
+     */
+    private buildDifficultyHint(): string {
+        const profile = loadProfile();
+        return DIFFICULTY_ORDER.map(d => {
+            const unlocked = isDifficultyUnlocked(profile, d);
+            const need = DIFFICULTY_UNLOCK_LEVELS[d];
+            return unlocked ? `${DIFFICULTIES[d].name}✓` : `${DIFFICULTIES[d].name}(通关${need ?? 0}关解锁)`;
+        }).join('  ');
+    }
+
+    /**
      * 创建图形设置内容
      */
     private createGraphicsContent(): void {
@@ -198,13 +211,21 @@ export class SettingsUI {
         content.setName('graphics-content');
         content.setVisible(false);
 
-        // 难度设置（Easy 血条制降级，Normal+ 残机制，影响弹幕/血量缩放）
+        // 难度设置（Easy 血条制降级，Normal+ 残机制；Hard/Lunatic 按主线进度解锁）
         const difficultyLabels = DIFFICULTY_ORDER.map(d => DIFFICULTIES[d].name);
         const currentDifficulty = getStoredDifficulty();
         const currentDifficultyIndex = Math.max(0, DIFFICULTY_ORDER.indexOf(currentDifficulty.id));
+        const difficultyEnabled = (i: number) => isDifficultyUnlocked(loadProfile(), DIFFICULTY_ORDER[i]);
         this.createSettingOption(content, -120, '难度', difficultyLabels, currentDifficultyIndex, (value) => {
             setStoredDifficulty(DIFFICULTY_ORDER[value]);
-        });
+        }, difficultyEnabled);
+
+        const difficultyHint = this.scene.add.text(-180, -85, this.buildDifficultyHint(), {
+            fontSize: '12px',
+            color: '#888888',
+            wordWrap: { width: 520 }
+        }).setOrigin(0, 0.5);
+        content.add(difficultyHint);
 
         // 画质设置
         this.createSettingOption(content, -50, '画质', ['低', '中', '高'], this.settings.graphics.quality, (value) => {
@@ -283,7 +304,7 @@ export class SettingsUI {
     /**
      * 创建设置选项（下拉式）
      */
-    private createSettingOption(container: Phaser.GameObjects.Container, y: number, label: string, options: string[], currentValue: number, callback: (value: number) => void): void {
+    private createSettingOption(container: Phaser.GameObjects.Container, y: number, label: string, options: string[], currentValue: number, callback: (value: number) => void, enabled?: (index: number) => boolean): void {
         // 标签
         const labelText = this.scene.add.text(-180, y, label, {
             fontSize: '16px',
@@ -312,17 +333,36 @@ export class SettingsUI {
         }).setOrigin(0.5);
 
         // 交互
+        const refreshOptionColor = () => {
+            optionText.setColor(enabled && !enabled(currentValue) ? '#666666' : '#ffd700');
+        };
+        refreshOptionColor();
+
         leftArrow.setInteractive({ useHandCursor: true });
         leftArrow.on('pointerdown', () => {
-            currentValue = (currentValue - 1 + options.length) % options.length;
+            let next = currentValue;
+            for (let i = 0; i < options.length; i++) {
+                next = (next - 1 + options.length) % options.length;
+                if (!enabled || enabled(next)) break;
+            }
+            if (next === currentValue) return;
+            currentValue = next;
             optionText.setText(options[currentValue]);
+            refreshOptionColor();
             callback(currentValue);
         });
 
         rightArrow.setInteractive({ useHandCursor: true });
         rightArrow.on('pointerdown', () => {
-            currentValue = (currentValue + 1) % options.length;
+            let next = currentValue;
+            for (let i = 0; i < options.length; i++) {
+                next = (next + 1) % options.length;
+                if (!enabled || enabled(next)) break;
+            }
+            if (next === currentValue) return;
+            currentValue = next;
             optionText.setText(options[currentValue]);
+            refreshOptionColor();
             callback(currentValue);
         });
 

@@ -24,7 +24,7 @@ import { ENEMY_PATTERNS } from '@data/BulletPatterns';
 import { getStoredDifficulty, DifficultyConfig } from '@data/Difficulty';
 import { submitRush } from '@data/RushRecords';
 import { getMecha, MechaConfig } from '@data/MechaData';
-import { loadProfile, recordMaxLevelCleared } from '@data/Profile';
+import { loadProfile, recordMaxLevelCleared, recordStageResult, recordPlay } from '@data/Profile';
 import { getNextEquipNodes, getEquipEvolutionNode, EquipEvolutionNode, EquipBranch } from '@data/EquipEvolution';
 import { getNextSkillNodes, getSkillEvolutionNode, SkillEvolutionNode, SkillBranch } from '@data/SkillEvolution';
 
@@ -1472,8 +1472,10 @@ export class GameScene extends Phaser.Scene {
     private handleVictory(): void {
         this.gameOver = true;
 
-        // 记录主线通关进度（用于机娘解锁）
+        // 记录主线通关进度（用于机娘解锁）与最佳成绩/生涯统计
         recordMaxLevelCleared(this.currentLevelIndex + 1);
+        recordStageResult(this.currentLevelIndex + 1, this.score);
+        recordPlay(this.mecha.id, { combo: this.maxCombo, graze: this.stgPlayer.getState().graze });
 
         if (this.waveTimer) this.waveTimer.destroy();
         if (this.enemyFireTimer) this.enemyFireTimer.destroy();
@@ -2015,6 +2017,9 @@ export class GameScene extends Phaser.Scene {
      */
     private handleGameOver(): void {
         console.log('GameScene: 游戏结束，分数:', this.score);
+
+        // 记录生涯统计（无尽模式同样计入局数）
+        recordPlay(this.mecha.id, { combo: this.maxCombo, graze: this.stgPlayer.getState().graze });
 
         if (this.waveTimer) {
             this.waveTimer.destroy();
