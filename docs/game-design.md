@@ -308,7 +308,8 @@ Difficulty { bulletDensity, bulletSpeed, enemyHP, enemyFireRate, scoreMultiplier
 
 ### M5（打磨）部分完工
 - v5.5 新手引导：独立 `TutorialScene`（移动 → Focus → 判定点 → 擦弹 → 射击与 Bomb → 完成六步教学），主菜单「新手引导」入口，含擦弹判定/判定点高亮/Bomb 清屏实操
-- 剩余：真实 BGM/SFX 替换程序化音效、对象池性能优化、存档结构完善
+- v5.6 存档结构完善：`Profile` 扩展（每关最佳成绩 `stageRecords`、生涯统计 `bestCombo`/`bestGraze`/`totalScore`/`totalPlays`/`mechaPlays`）；难度解锁（Hard 需通关 4 关、Lunatic 需通关 9 关，Easy/Normal 默认）；主菜单生涯总览；设置界面难度锁定与解锁提示
+- 剩余：真实 BGM/SFX 替换程序化音效、对象池性能优化
 
 ### 后续验证提示
 当前机器 `esbuild.exe` 被安全策略拦截（0xC0000409），`vitest`/`vite build` 无法运行，属环境限制；验证已用 `tsc --noEmit`（本次改动文件无新错误）与 `eslint` 0 error 替代。
