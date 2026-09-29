@@ -6,15 +6,23 @@
 
 import Phaser from 'phaser';
 import { BulletPatternConfig, PATTERNS } from '@data/BulletPatterns';
+import { BulletPool } from '@game/BulletPool';
 
 export class BulletPatternEngine {
     private scene: Phaser.Scene;
     private textureKey: string = 'enemy_bullet_dot';
     private laserTextureKey: string = 'enemy_bullet_laser';
     private textureReady: boolean = false;
+    private pool: BulletPool;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
+        this.pool = new BulletPool(scene, this.textureKey);
+    }
+
+    /** 对象池统计（调试用） */
+    public getPoolStats() {
+        return this.pool.getStats();
     }
 
     /**
@@ -133,21 +141,31 @@ export class BulletPatternEngine {
         damage: number
     ): void {
         this.ensureTextures();
-        const bullet = this.scene.add.image(x, y, this.textureKey).setTint(color);
-        bullet.setScale(radius / 12, radius / 12);
-
-        const glow = this.scene.add.circle(x, y, radius + 6, color, 0.3);
+        const { bullet, glow } = this.pool.acquire(x, y, color, radius);
 
         bullet.setData('velocityX', Math.cos(angle) * speed);
         bullet.setData('velocityY', Math.sin(angle) * speed);
         bullet.setData('damage', damage);
         bullet.setData('glow', glow);
         bullet.setData('hitRadius', radius);
-        if (cfg.curve) {
-            bullet.setData('curve', cfg.curve);
-        }
+        bullet.setData('curve', cfg.curve);
+        bullet.setData('grazed', false);
 
         group.add(bullet);
+    }
+
+    /**
+     * 归还敌弹至对象池（替代 destroy，同时回收子弹与光晕）
+     */
+    public releaseBullet(bullet: any): void {
+        if (!bullet) return;
+        const glow = bullet.getData('glow');
+        this.pool.release(bullet, glow);
+    }
+
+    /** 重置对象池（场景销毁时调用） */
+    public resetPool(): void {
+        this.pool.reset();
     }
 
     /**

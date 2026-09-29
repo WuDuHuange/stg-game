@@ -1135,6 +1135,8 @@ export class GameScene extends Phaser.Scene {
         const shouldTrail = this.trailFrameCounter % 3 === 0;
 
         this.enemyBullets.getChildren().forEach((bullet: any) => {
+            if (!bullet.active) return;
+
             // 由弹幕引擎处理运动（含正弦/加速等曲线）
             this.bulletPatternEngine.updateBullet(bullet, this.game.loop.delta);
 
@@ -1144,7 +1146,7 @@ export class GameScene extends Phaser.Scene {
                 glow.y = bullet.y;
             }
 
-            if (shouldTrail && bullet.active && !bullet.getData('isLaser')) {
+            if (shouldTrail && !bullet.getData('isLaser')) {
                 const color = typeof bullet.fillColor === 'number' ? bullet.fillColor : 0xff6600;
                 this.particleSystem.createEnemyBulletTrail(bullet.x, bullet.y, color);
             }
@@ -1153,8 +1155,7 @@ export class GameScene extends Phaser.Scene {
                 bullet.y < -20 ||
                 bullet.x < -20 ||
                 bullet.x > this.cameras.main.width + 20) {
-                if (glow && glow.active) glow.destroy();
-                bullet.destroy();
+                this.bulletPatternEngine.releaseBullet(bullet);
             }
         });
     }
@@ -1188,10 +1189,8 @@ export class GameScene extends Phaser.Scene {
             // 命中：判定点接触
             if (distance <= hitRadius) {
                 const damage = bullet.getData('damage') || 8;
-                const glow = bullet.getData('glow');
-                if (glow && glow.active) glow.destroy();
                 this.playerTakeDamage(damage);
-                bullet.destroy();
+                this.bulletPatternEngine.releaseBullet(bullet);
             }
         });
     }
@@ -1486,7 +1485,9 @@ export class GameScene extends Phaser.Scene {
             this.createExplosion(enemy.x, enemy.y);
             this.destroyEnemy(enemy);
         });
-        this.enemyBullets.clear(true, true);
+        this.enemyBullets.getChildren().forEach((bullet: any) => {
+            if (bullet.active) this.bulletPatternEngine.releaseBullet(bullet);
+        });
 
         this.screenEffects.shakeAndFlash(15, 0xffd700, 800);
         audioManager.playProceduralSFX('upgrade');
@@ -1899,11 +1900,10 @@ export class GameScene extends Phaser.Scene {
     private useBomb(): void {
         if (!this.stgPlayer.useBomb()) return;
 
-        // 全屏清除敌弹
+        // 全屏清除敌弹（回收至对象池，复用对象而非销毁）
         this.enemyBullets.getChildren().forEach((bullet: any) => {
-            const glow = bullet.getData('glow');
-            if (glow && glow.active) glow.destroy();
-            bullet.destroy();
+            if (!bullet.active) return;
+            this.bulletPatternEngine.releaseBullet(bullet);
         });
 
         // 全屏伤害
@@ -2182,6 +2182,7 @@ export class GameScene extends Phaser.Scene {
             this.bullets.clear(true, true);
         }
         if (this.enemyBullets) {
+            if (this.bulletPatternEngine) this.bulletPatternEngine.resetPool();
             this.enemyBullets.clear(true, true);
         }
         if (this.enemies) {
