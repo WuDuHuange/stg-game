@@ -29,6 +29,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "phaser": "^3.70.0"
+    "phaser": "^3.70.0",
+    "soundfont-player": "^0.12.0"
   }
 }
