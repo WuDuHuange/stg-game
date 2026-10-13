@@ -8,6 +8,8 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { BGMPlayer } from './systems/BGMPlayer';
+import { SfxAccent } from './systems/SfxAccent';
+import { audioManager } from './systems/AudioManager';
 
 /**
  * 游戏配置
@@ -43,20 +45,27 @@ class STGGame extends Phaser.Game {
 }
 
 const bgm = BGMPlayer.getInstance();
+const accent = SfxAccent.getInstance();
 let bgmTrack = '';
 let bgmBusy = false;
 let bgmVol = -1;
+let accentVol = -1;
+let sfxPatched = false;
 
-function readMusicVolume(): number {
+function readVolumes(): { master: number; music: number; sfx: number } {
     try {
         const raw = localStorage.getItem('stg_settings');
         if (raw) {
             const a = (JSON.parse(raw) || {}).audio || {};
             const norm = (x: any, d: number) => (typeof x === 'number' ? (x > 1 ? x / 100 : x) : d);
-            return norm(a.masterVolume, 0.8) * norm(a.musicVolume, 0.7);
+            return {
+                master: norm(a.masterVolume, 0.8),
+                music: norm(a.musicVolume, 0.7),
+                sfx: norm(a.sfxVolume, 0.9)
+            };
         }
     } catch { /* ignore */ }
-    return 0.56;
+    return { master: 0.8, music: 0.7, sfx: 0.9 };
 }
 
 function activeScene(game: Phaser.Game): Phaser.Scene | null {
@@ -69,12 +78,35 @@ function activeScene(game: Phaser.Game): Phaser.Scene | null {
     return null;
 }
 
-async function pollBgm(game: Phaser.Game): Promise<void> {
-    const vol = readMusicVolume();
-    if (vol !== bgmVol) { bgm.setVolume(vol); bgmVol = vol; }
+/**
+ * 包装 AudioManager.playProceduralSFX：保留程序化音效，叠加第三方音色强调音
+ */
+function patchSfx(): void {
+    if (sfxPatched) return;
+    sfxPatched = true;
+    const orig = audioManager.playProceduralSFX.bind(audioManager);
+    (audioManager as any).playProceduralSFX = (type: string) => {
+        orig(type as any);
+        accent.play(type);
+    };
+}
+
+async function pollAudio(game: Phaser.Game): Promise<void> {
+    const v = readVolumes();
+    const musicVol = v.master * v.music;
+    if (musicVol !== bgmVol) { bgm.setVolume(musicVol); bgmVol = musicVol; }
+    const sfxVol = v.master * v.sfx;
+    if (sfxVol !== accentVol) { accent.setVolume(sfxVol); accentVol = sfxVol; }
 
     const scene = activeScene(game);
     if (!scene) return;
+
+    const sm = scene.sound as Phaser.Sound.WebAudioSoundManager;
+    const ctx = sm && sm.context ? sm.context : null;
+    if (!ctx) return;
+    const dest = sm.destination || ctx.destination;
+
+    accent.ensure(ctx, dest);
 
     const key = scene.scene.key;
     let target = '';
@@ -87,13 +119,9 @@ async function pollBgm(game: Phaser.Game): Promise<void> {
 
     bgmBusy = true;
     try {
-        const sm = scene.sound as Phaser.Sound.WebAudioSoundManager;
-        const ctx = sm && sm.context ? sm.context : null;
-        if (ctx) {
-            await bgm.init(ctx, sm.destination || ctx.destination);
-            bgm.setVolume(readMusicVolume());
-            if (await bgm.play(target)) bgmTrack = target;
-        }
+        await bgm.init(ctx, dest);
+        bgm.setVolume(musicVol);
+        if (await bgm.play(target)) bgmTrack = target;
     } catch { /* ignore: 回退程序化音效 */ } finally { bgmBusy = false; }
 }
 
@@ -105,6 +133,7 @@ function initGame(): void {
     if (loadingBar) loadingBar.style.width = '30%';
 
     const game = new STGGame(config);
+    patchSfx();
 
     game.events.once('ready', () => {
         setTimeout(() => {
@@ -114,7 +143,7 @@ function initGame(): void {
                 setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
             }
         }, 1000);
-        window.setInterval(() => { void pollBgm(game); }, 700);
+        window.setInterval(() => { void pollAudio(game); }, 700);
     });
 }
 
