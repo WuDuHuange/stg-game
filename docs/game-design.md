@@ -311,7 +311,8 @@ Difficulty { bulletDensity, bulletSpeed, enemyHP, enemyFireRate, scoreMultiplier
 - v5.6 存档结构完善：`Profile` 扩展（每关最佳成绩 `stageRecords`、生涯统计 `bestCombo`/`bestGraze`/`totalScore`/`totalPlays`/`mechaPlays`）；难度解锁（Hard 需通关 4 关、Lunatic 需通关 9 关，Easy/Normal 默认）；主菜单生涯总览；设置界面难度锁定与解锁提示
 - v5.7 对象池性能优化：新增 `BulletPool`（acquire/release 复用敌弹贴图与光晕），`BulletPatternEngine` 集成，出界/命中/Bomb/胜利/场景销毁全部改为回收并含防重复入池防御
 - v5.8 第三方音色 BGM：soundfont-player + gleitz/midi-js-soundfonts CDN（MusyngKite），电子风三曲（菜单/战斗/Boss）；BGMPlayer 三轨（贝斯/主音走 SoundFont 采样，鼓程序化合成）；场景自动切歌 + 音量同步 + 加载失败回退程序化音效
-- 剩余：关键 SFX 第三方音色叠加（射击/爆炸保留程序化，升级/技能可叠加）
+- v5.9 关键 SFX 第三方音色叠加：`SfxAccent` 为升级（上行琶音）/技能（和弦）/连击（高音）叠加 SoundFont 强调音；`main` 包装 `playProceduralSFX` 叠加，高频音效保留程序化，音量按 sfxVolume 同步
+- 剩余：M5 纯代码项已全部完成；真实 BGM/SFX 素材可继续替换程序化音效（可选）
 
 ### 后续验证提示
 当前机器 `esbuild.exe` 被安全策略拦截（0xC0000409），`vitest`/`vite build` 无法运行，属环境限制；验证已用 `tsc --noEmit`（本次改动文件无新错误）与 `eslint` 0 error 替代。
